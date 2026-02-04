@@ -73,6 +73,10 @@ class DatabaseManager:
             conditions = []
             sql_params = {}
             
+            # Limit Logic (Global)
+            limit = params.get("limit", 50)
+            limit_clause = f"LIMIT {limit}" if limit else ""
+            
             # Filters (Case-Insensitive)
             if "region" in filters:
                 val = filters["region"]
@@ -106,8 +110,27 @@ class DatabaseManager:
                     sql_params["category"] = val
                 
             if "year" in filters:
-                conditions.append("substr(order_date, 1, 4) = :year")
+                # Dynamic: Use YEAR() for MySQL, substr() for SQLite
+                if "mysql" in self.db_url.lower():
+                    conditions.append("YEAR(order_date) = :year")
+                else:
+                    conditions.append("substr(order_date, 1, 4) = :year")
                 sql_params["year"] = str(filters["year"])
+            
+            # Quarter filter (e.g., Q3 = months 7, 8, 9)
+            if "quarter_months" in filters:
+                months = filters["quarter_months"]
+                month_placeholders = ", ".join([f":qm_{i}" for i in range(len(months))])
+                
+                # Dynamic: Use MONTH() for MySQL, substr() for SQLite
+                if "mysql" in self.db_url.lower():
+                    conditions.append(f"MONTH(order_date) IN ({month_placeholders})")
+                else:
+                    # SQLite: CAST(substr(order_date, 6, 2) AS INTEGER)
+                    conditions.append(f"CAST(substr(order_date, 6, 2) AS INTEGER) IN ({month_placeholders})")
+                
+                for i, m in enumerate(months):
+                    sql_params[f"qm_{i}"] = m
             
             where_clause = " AND ".join(conditions)
             if where_clause:
@@ -115,7 +138,84 @@ class DatabaseManager:
 
             # --- 2. Intent Handling ---
             
-            if intent == "AGGREGATE":
+            # --- 2. Intent Handling ---
+            
+            # Special Handling for Advanced Visualizations
+            viz_type = params.get("visualization_type", "").lower()
+            
+            if viz_type in ["box_plot", "violin"]:
+                # Distribution Analysis: Requires Raw Data calculation -> Quartiles
+                # Fetch raw data for the metrics and group by
+                select_groups = []
+                col_map = {}
+                for g in group_by:
+                    col = g
+                    if g == "date": col = "substr(order_date, 1, 7)" # Monthly
+                    if g == "product_name": col = "sub_category"
+                    select_groups.append(col)
+                    col_map[g] = col
+
+                # Construct Query to get raw values for distribution
+                # We need all rows to calculate distribution, but filtered
+                raw_metric = metrics[0] # Focus on primary metric
+                
+                if not select_groups:
+                    # Global distribution (e.g. "Distribution of Sales")
+                    final_sql = f"SELECT CAST({raw_metric} AS REAL) as value FROM {table_name} {where_clause}"
+                else:
+                    # Grouped distribution
+                    groups_str = ", ".join([f"{c} as {g}" for g, c in col_map.items()])
+                    final_sql = f"SELECT {groups_str}, CAST({raw_metric} AS REAL) as value FROM {table_name} {where_clause} LIMIT 5000" # Safety limit
+
+                with self.engine.connect() as conn:
+                    df = pd.read_sql(text(final_sql), conn, params=sql_params)
+                
+                if df.empty: return []
+
+                # Calculate Quartiles per Group
+                results = []
+                if not select_groups:
+                    # Global
+                    stats = df['value'].describe(percentiles=[.25, .5, .75])
+                    # ApexCharts expects [min, q1, median, q3, max]
+                    results.append({
+                        "category": "All",
+                        "quartiles": [stats['min'], stats['25%'], stats['50%'], stats['75%'], stats['max']],
+                        metrics[0]: stats['mean'] # keeping metric key for label
+                    })
+                else:
+                    # Grouped
+                    # We assume 1st group key is the main x-axis
+                    primary_group = group_by[0]
+                    for name, group in df.groupby(primary_group):
+                        stats = group['value'].describe(percentiles=[.25, .5, .75])
+                        results.append({
+                            primary_group: name,
+                             # ApexCharts expects [min, q1, median, q3, max]
+                            "quartiles": [stats['min'], stats['25%'], stats['50%'], stats['75%'], stats['max']],
+                            metrics[0]: stats['mean']
+                        })
+                return results
+
+            elif viz_type in ["scatter", "bubble"]:
+                # Relationship: Needs granular data, ideally 2 metrics or GroupBy SubCategory/Product
+                # If 'scatter', we usually want Entity vs Metric1 (and Metric2)
+                # Ensure we have a high-cardinality group if none specified, or respect list
+                
+                target_group = "sub_category" # Default granularity
+                if group_by: target_group = group_by[0]
+                
+                select_metric_str = ", ".join([f"SUM(CAST({m} AS REAL)) as {m}" for m in metrics])
+                
+                # Fetch grouped data (points)
+                if group_by:
+                     final_sql = f"SELECT {target_group}, {select_metric_str} FROM {table_name} {where_clause} GROUP BY {target_group} LIMIT 100"
+                else:
+                     # If no group, scatter is meaningless unless we have raw data. 
+                     # Let's assume scatter implies product/sub-cat granularity
+                     final_sql = f"SELECT sub_category as label, {select_metric_str} FROM {table_name} {where_clause} GROUP BY sub_category LIMIT 100"
+
+            elif intent == "AGGREGATE" or viz_type in ["bar", "pie", "donut", "treemap", "heatmap", "stacked", "lollipop", "area"]:
                 # Constructs: SELECT region, SUM(sales) as sales FROM ... GROUP BY region
                 # Handling Date grouping specially
                 select_groups = []
@@ -126,7 +226,13 @@ class DatabaseManager:
                         # Monthly trend default for aggregates involving date
                         select_groups.append("substr(order_date, 1, 7) as month")
                         group_clause_items.append("month")
-                    elif g in ["region", "category", "sub_category", "state", "city", "product_name"]:
+                    elif g == "quarter":
+                        if "mysql" in self.db_url.lower():
+                            select_groups.append("CONCAT('Q', QUARTER(order_date)) as quarter")
+                        else:
+                            select_groups.append("'Q' || ((CAST(substr(order_date, 6, 2) AS INTEGER) + 2) / 3) as quarter")
+                        group_clause_items.append("quarter")
+                    elif g in ["region", "category", "sub_category", "state", "city", "product_name", "segment"]:
                          # Map specific internal names to DB columns if needed
                          col = g
                          if g == "product_name": col = "sub_category" # Fallback: No product column in schema
@@ -146,9 +252,9 @@ class DatabaseManager:
                     # For GROUP BY clause, use the base column names or aliases
                     group_clause_str = ", ".join(group_clause_items)
                     
-                    final_sql = f"SELECT {groups_str}, {', '.join(select_metrics)} FROM {table_name} {where_clause} GROUP BY {group_clause_str} ORDER BY {metrics[0]} DESC LIMIT 50"
+                    final_sql = f"SELECT {groups_str}, {', '.join(select_metrics)} FROM {table_name} {where_clause} GROUP BY {group_clause_str} ORDER BY {metrics[0]} DESC {limit_clause}"
 
-            elif intent == "TREND":
+            elif intent == "TREND" or viz_type in ["line", "lag"]:
                 # Force Monthly Trend
                 # SELECT substr(order_date, 1, 7) as month, SUM(sales) ... GROUP BY month
                 select_metrics = [f"SUM(CAST({m} AS REAL)) as {m}" for m in metrics]
@@ -157,7 +263,7 @@ class DatabaseManager:
             else:
                 # LIST / DEFAULT (Limit 50)
                 # Select all columns
-                final_sql = f"SELECT * FROM {table_name} {where_clause} LIMIT 50"
+                final_sql = f"SELECT * FROM {table_name} {where_clause} {limit_clause}"
 
             # --- 3. Execution ---
             # print(f"DEBUG: Generated SQL: {final_sql} | Params: {sql_params}") 

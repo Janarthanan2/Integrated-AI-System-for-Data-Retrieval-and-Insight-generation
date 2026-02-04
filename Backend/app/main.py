@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from .security import SecurityManager
 from .database import DatabaseManager
 from .retrieval import RetrievalManager
@@ -10,14 +11,42 @@ import os
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
+import numpy as np
 
-# Initialize FastAPI
-app = FastAPI(title="Modular AI Analytics Backend")
+# Import conversation history components
+from .routers import auth_router, conversations_router
+from .db_models.base import init_db, close_db
+
+
+# Lifespan event handler for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    # Startup: Initialize conversation history database
+    print("🚀 Initializing conversation history database...")
+    try:
+        await init_db()
+        print("✅ Conversation history database ready")
+    except Exception as e:
+        print(f"⚠️ Could not initialize history DB (continuing anyway): {e}")
+    
+    yield  # App running
+    
+    # Shutdown: Close database connections
+    print("🛑 Closing database connections...")
+    await close_db()
+
+
+# Initialize FastAPI with lifespan
+app = FastAPI(
+    title="Modular AI Analytics Backend",
+    lifespan=lifespan
+)
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +66,7 @@ try:
 except Exception as e:
     print(f"Startup Error: {e}")
 
-from .utils import summarize_data
+from .utils import summarize_data, analyze_trend
 import time
 
 # ... (Imports)
@@ -48,67 +77,182 @@ async def process_query(request: QueryRequest):
         start_time = time.time()
         user_query = request.query
         
+
+        
         try:
-            # 1. Agentic Decision Making
-            # The agent decides WHAT to do (Intent, Data Functions, RAG)
-            agent_decision = extractor.decide_action(user_query)
+            # 1. Intent & Parameter Extraction
+            params = extractor.extract_parameters(user_query)
+            print(f"DEBUG EXTRACTION: Intent={params.get('intent')} Filters={params.get('filters')} GroupBy={params.get('group_by')} Metrics={params.get('metrics')}")
             
-            intent = agent_decision["intent"]
-            analysis_type = agent_decision["analysis_type"]
-            data_fns = agent_decision["data_functions"]
-            use_docs = agent_decision["use_documents"]
+            # Context Recovery Logic (Follow-up handling)
+            # If the user asks to "visualize it" or "show as line", but we found no entities,
+            # we try to grab the previous query's context.
+            # If the user asks to "visualize it" or "show as line", but we found no entities,
+            # we try to grab the previous query's context.
+            if params["intent"] == "LIST" or (not params["metrics"] and not params["filters"]): 
+                 if any(k in user_query.lower() for k in ["visualize", "graph", "chart", "line", "bar", "pie", "scatter"]):
+                     if request.history:
+                         # Find the last USER message (before this one)
+                         # History structure: [{"role": "user", "content": "..."}, ...]
+                         # This request.history might include the current query at the end? Protocol check.
+                         # Assuming history contains PREVIOUS turns.
+                         reversed_hist = request.history[::-1]
+                         last_user_msg = next((m for m in reversed_hist if m['role'] == 'user' and m['content'] != user_query), None)
+                         
+                         if last_user_msg:
+                             print(f"Recovering context from previous query: {last_user_msg['content']}")
+                             prev_params = extractor.extract_parameters(last_user_msg['content'])
+                             
+                             # Merge: Keep previous intent/filters/metrics, but override viz type from current
+                             params["intent"] = prev_params["intent"]
+                             params["filters"] = prev_params["filters"]
+                             params["metrics"] = prev_params["metrics"]
+                             params["group_by"] = prev_params["group_by"]
+                             # Only override viz type if we detected a specific one in current
+                             if "line" in user_query.lower() or "trend" in user_query.lower():
+                                 params["visualization_type"] = "line"
+                                 # If switching to trend/line, we might need to force the intent to TREND if it was DIAGNOSTIC
+                                 if params["intent"] == "DIAGNOSTIC":
+                                     # DIAGNOSTIC data (2 months) as Line? Techincally yes. 
+                                     # But maybe user wants "Trend of these items".
+                                     # For now, let's keep intent DIAGNOSTIC (since we have logic) but change viz type.
+                                     # But main.py DIAGNOSTIC block ignores viz type...
+                                     # We need to map DIAGNOSTIC -> line -> handle it in frontend or main?
+                                     pass
+                             elif "bar" in user_query.lower():
+                                 params["visualization_type"] = "bar"
+                             elif "pie" in user_query.lower():
+                                 params["visualization_type"] = "pie"
+                             elif "scatter" in user_query.lower():
+                                 params["visualization_type"] = "scatter"
+                             
+                             print(f"Context Recovered. New Intent: {params['intent']}")
+
+            intent = params["intent"]
+            filters = params["filters"]
+            scope = filters.get("region", "Global")
+            if "category" in filters: scope += f" / {filters['category']}"
+            sanitized_query = params["sanitized_query"]
             
-            # Debug: Stream decision to frontend (optional, hidden by default but useful)
-            # yield json.dumps({"type": "debug", "decision": agent_decision}) + "\n"
+            if intent == "GREETING":
+                yield json.dumps({"type": "token", "chunk": "Hello! I am AI Data Analyst, your advanced AI analytics assistant. Ask me to analyze sales trends, show top products, or explain business strategies."}) + "\n"
+                return
 
             context_data = ""
-            chart_metadata = None
-            db_results = []
+            context_source = []
+            chart_metadata = None # For frontend chart rendering
 
-            # 2. Execution Loop: Run Prescribed Data Functions
-            for task in data_fns:
-                fn_name = task["name"]
-                fn_params = task["parameters"]
+            # 2. Data Retrieval
+            if intent in ["AGGREGATE", "TREND", "LIST", "DATABASE", "DIAGNOSTIC", "DIRECT"]:
                 
-                # Dynamic dispatch to database manager
-                if hasattr(database, fn_name):
-                    method = getattr(database, fn_name)
-                    result = method(**fn_params)
+                db_start = time.time()
+                
+                if intent == "DIAGNOSTIC":
+                    metric = params.get("metrics", ["sales"])[0]
                     
-                    if result:
-                        if isinstance(result, list):
-                            db_results.extend(result)
-                        elif isinstance(result, dict) and "error" not in result:
-                            db_results.append(result)
-                            
-                        # Format for Context
-                        # (Simple JSON dump or tailored summary)
-                        from .utils import summarize_data
-                        summary = summarize_data(result)
-                        context_data += f"DATA INSIGHT ({fn_name}):\n{summary}\n\n"
+                    if params["filters"].get("analysis_mode") == "decline":
+                         # Decline Analysis
+                         from .analytics import perform_decline_analysis
+                         decline_result = perform_decline_analysis()
+                         
+                         if "error" in decline_result:
+                             context_data += f"ANALYSIS ERROR: {decline_result['error']}\n"
+                         else:
+                             # STRICT RULE: Pass ONLY conclusions.
+                             # decline_result is a list of dicts.
+                             declining_items = [d for d in decline_result if d['sales_change'] < 0]
+                             
+                             if not declining_items:
+                                 context_data += "CONCLUSION: No categories are currently declining. All patterns show growth or stability.\n"
+                             else:
+                                 context_data += "CONCLUSION: The following categories are declining (Month-over-Month):\n"
+                                 for d in declining_items:
+                                     context_data += f"- {d['category']}: Declined by {abs(d['sales_change'])}% (Current Sales: {d['current_sales']})\n"
+                             
+                             chart_metadata = {"type": params.get("visualization_type", "decline"), "data": declining_items}
+
+                    else:
+                        # Standard RCA
+                        rca_result = perform_root_cause_analysis(params["filters"], metric)
                         
-                        # Set chart data (taking the first valid one for now)
-                        if not chart_metadata:
-                            chart_metadata = {"type": analysis_type, "data": result}
+                        if "error" in rca_result:
+                             context_data += f"DIAGNOSTIC ERROR: {rca_result['error']}\n"
+                        else:
+                             factors_text = "\n".join([f"- {f['name']} contributed {f['impact']:+.2f}" for f in rca_result['factors']])
+                             context_data += f"DIAGNOSTIC ANALYSIS ({rca_result['period']}):\n{rca_result['summary']}\nTop Drivers:\n{factors_text}\n\n"
+                             chart_metadata = {"type": "rca", "data": rca_result.get('factors', [])}
+
+                else:
+                    db_results = database.query_dynamic(params)
+                    
+                    if isinstance(db_results, dict) and "error" in db_results:
+                        yield json.dumps({"type": "error", "content": db_results['error']}) + "\n"
+                        return
+
+                    # HARD STOP: If data is missing/empty, do NOT call LLM.
+                        yield json.dumps({"type": "token", "chunk": "I don't see sufficient data to answer this question."}) + "\n"
+                        return
+
+                    # CLEAN DATA: Replace NaN with None for JSON compliance
+                    for r in db_results:
+                        for k, v in r.items():
+                            if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
+                                r[k] = None
+
+                    print(f"DEBUG: Data retrieved. Rows={len(db_results)} Keys={list(db_results[0].keys())}")
+                    
+                    # Summarize
+                    if intent == "TREND":
+                        structured_summary = analyze_trend(db_results)
+                    else:
+                        structured_summary = summarize_data(db_results)
+                        
+                    # Just inject the raw table/summary. 
+                    # The Prompt Template will handle labeling if needed.
+                    context_data += f"{structured_summary}\n\n"
+                    
+                    chart_type = params.get("visualization_type") or intent.lower()
+                    chart_metadata = {"type": chart_type, "data": db_results}
+
+                    # SAFETY CHECK: Raw Transaction Data
+                    # If we accidentally got raw rows (order_id) and user didn't explicitly ask for a list/table,
+                    # we must block it from the LLM.
+                    if db_results and isinstance(db_results, list) and len(db_results) > 0 and "order_id" in db_results[0]:
+                         if intent != "LIST":
+                             yield json.dumps({"type": "token", "chunk": "I cannot analyze raw transactional data directly. Please ask for an aggregation (e.g., 'Total Sales') or a specific list."}) + "\n"
+                             return
+                         else:
+                             # If it IS a list, just return the table directly without LLM
+                             # Use the utility to format it as a table
+                             table_str = summarize_data(db_results)
+                             yield json.dumps({"type": "token", "chunk": table_str}) + "\n"
+                             yield json.dumps({"type": "chart", "content": chart_metadata}) + "\n"
+                             return
+
+                queries_duration = time.time() - db_start
+
+                queries_duration = time.time() - db_start
+
+            elif intent == "DOCUMENT":
+                retr_start = time.time()
+                docs = retrieval.retrieve(sanitized_query, top_k=3)
                 
-                elif fn_name == "perform_root_cause_analysis":
-                    # Special Case: Analytics Module
-                    rca_result = perform_root_cause_analysis(**fn_params)
-                    if "summary" in rca_result:
-                        context_data += f"DIAGNOSTIC ANALYSIS:\n{rca_result['summary']}\nTop Drivers:\n{rca_result.get('factors', [])}\n\n"
-                        chart_metadata = {"type": "rca", "data": rca_result.get('factors', [])}
-
-            # 3. RAG / Document Retrieval (if Agents requested it)
-            if use_docs:
-                sanitized_query = agent_decision["debug_info"]["sanitized_query"]
-                docs = retrieval.retrieve(sanitized_query, top_k=2) # Keep it focused
                 if docs:
-                     doc_text = "\n".join([f"- {d['content'][:300].replace(chr(10), ' ')}" for d in docs])
-                     context_data += f"DOCUMENT KNOWLEDGE:\n{doc_text}\n\n"
+                    doc_text = "\n".join([f"- {d['content'][:300].replace(chr(10), ' ')}" for d in docs])
+                    context_data += f"DOCUMENT INSIGHTS:\n{doc_text}\n\n"
+            
+            elif intent == "UNKNOWN":
+                 # Fallback to general chat or simple acknowledgment
+                 # For now, we can try RAG as a "Hail Mary" or just admit defeat nicely.
+                 # User requested "Clear error message" -> implying safe failure.
+                 yield json.dumps({"type": "token", "chunk": "I'm not sure I understand. Could you verify if you're asking about sales data, trends, or documentation?"}) + "\n"
+                 return
+            
 
-            # 4. Strict Generation
-            # Meta-data first
-            scope = agent_decision["debug_info"]["extracted_filters"].get("region", "Global")
+            
+            # 3. Generation Stream
+            
+            # Send Meta-data about charts/intent first
             meta_payload = {
                 "type": "meta", 
                 "intent": intent, 
@@ -117,11 +261,19 @@ async def process_query(request: QueryRequest):
             }
             yield json.dumps(meta_payload) + "\n"
 
-            # Short Circuit if Empty
-            if not context_data.strip() and intent != "RAG": # RAG might answer without DB data
-                 yield json.dumps({"type": "token", "chunk": "I don’t see sufficient data to answer this question."}) + "\n"
+            # CRITICAL FIX: Frontend expects "chart" type, not just "meta"
+            if chart_metadata:
+                yield json.dumps({"type": "chart", "content": chart_metadata}) + "\n"
+
+            # Context Trimming (Critical for Speed)
+            MAX_CONTEXT_CHARS = 1200
+            if len(context_data) > MAX_CONTEXT_CHARS:
+                 context_data = context_data[:MAX_CONTEXT_CHARS] + "... (truncated)"
+
+            if not context_data and intent != "CHAT":
+                 yield json.dumps({"type": "token", "chunk": "I couldn't find any relevant data for your query."}) + "\n"
             else:
-                 # Stream Response
+                 # Stream tokens
                  for chunk in generation.generate_response_stream(user_query, context_data, intent, history=request.history):
                      yield json.dumps({"type": "token", "chunk": chunk}) + "\n"
 
@@ -145,6 +297,10 @@ def health_check():
 
 from .analytics import router as analytics_router, perform_root_cause_analysis
 app.include_router(analytics_router)
+
+# Include conversation history routers
+app.include_router(auth_router)
+app.include_router(conversations_router)
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

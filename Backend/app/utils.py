@@ -8,47 +8,106 @@ def summarize_data(data_list):
     
     count = len(data_list)
     
+    # Helper to format values for LLM clarity
+    def format_value(val, key=""):
+        if val is None:
+            return "N/A"
+        if isinstance(val, float):
+            # Currency-like fields get dollar formatting
+            if any(k in key.lower() for k in ['profit', 'sales', 'revenue', 'amount', 'price', 'cost']):
+                return f"${val:,.2f}"
+            # Other floats get comma formatting
+            return f"{val:,.2f}"
+        if isinstance(val, int):
+            return f"{val:,}"
+        return str(val)
+    
     # SMART STRATEGY: 
     # If the dataset is small (aggregated results), show EVERYTHING.
     # LLMs handle table-like text very well.
-    if count <= 50:
-        lines = [f"Dataset contains {count} records:"]
-        # Header
-        headers = list(data_list[0].keys())
-        lines.append(" | ".join(headers))
-        lines.append("-" * (len(headers) * 10))
-        
-        # Rows
-        for row in data_list:
-            values = [str(row.get(h, "")) for h in headers]
-            lines.append(" | ".join(values))
-            
-        return "\n".join(lines)
+    # Optimized for LLM Context: Raw Data Only
     
-    # Fallback for large raw datasets (e.g. 1000 rows): Heuristic Summary
-    # 1. Basic Stats
-    summary_lines = [f"Dataset contains {count} records (Showing top 10 samples only)."]
+    # For single aggregated values, provide a clear statement
+    if count == 1 and len(data_list[0]) <= 3:
+        parts = []
+        for k, v in data_list[0].items():
+            parts.append(f"{k.replace('_', ' ').title()}: {format_value(v, k)}")
+        return "DATA: " + ", ".join(parts)
     
-    # 2. Key Metrics Heuristics (Summing large raw data)
-    numeric_sums = {}
-    total_loss = 0.0
+    # 1. Formatting for prompt (Markdown Table preferred for structure)
+    lines = []
+    # Header
+    headers = list(data_list[0].keys())
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
     
+    # Rows
     for row in data_list:
-        for k, v in row.items():
-            k_lower = k.lower()
-            if isinstance(v, (int, float)):
-                 if any(term in k_lower for term in ['sales', 'amount', 'profit', 'quantity', 'total']):
-                     numeric_sums[k] = numeric_sums.get(k, 0) + v
-                 if 'profit' in k_lower and v < 0:
-                     total_loss += v
+        values = [format_value(row.get(h), h) for h in headers]
+        lines.append("| " + " | ".join(values) + " |")
+        
+    return "\n".join(lines)
+
+def analyze_trend(data_list):
+    """
+    Analyzes a time-series dataset to extract key trend insights:
+    - Overall direction (Up/Down/Flat)
+    - Month-over-Month (MoM) changes
+    - Peak and Valley points
+    Returns a textual summary of conclusions.
+    """
+    if not data_list:
+        return "No trend data available."
     
-    if numeric_sums:
-        for k, v in numeric_sums.items():
-             summary_lines.append(f"- Net {k.title()}: {v:,.2f}")
-        
-    # 3. Snippet (Top 10)
-    for i, row in enumerate(data_list[:10]):
-        row_str = ", ".join([f"{k}: {v}" for k,v in row.items()])
-        summary_lines.append(f"  {i+1}. {row_str}")
-        
-    return "\n".join(summary_lines)
+    # 1. Identify Metric and Date Keys
+    keys = list(data_list[0].keys())
+    date_key = next((k for k in keys if "month" in k.lower() or "date" in k.lower()), keys[0]) # Fallback to first
+    avg_key_candidates = ['sales', 'profit', 'amount', 'quantity', 'total', 'count']
+    metric_key = next((k for k in keys if any(c in k.lower() for c in avg_key_candidates) and isinstance(data_list[0][k], (int, float))), None)
+    
+    if not metric_key:
+        # Fallback: find first numeric key
+        metric_key = next((k for k in keys if isinstance(data_list[0][k], (int, float))), None)
+    
+    if not metric_key:
+        return summarize_data(data_list) # Fallback to standard table if no metric found
+
+    # 2. Extract Series
+    values = [d[metric_key] for d in data_list]
+    dates = [d[date_key] for d in data_list]
+    
+    if len(values) < 2:
+        return summarize_data(data_list)
+
+    # 3. Compute Statistics
+    start_val = values[0]
+    end_val = values[-1]
+    overall_change = end_val - start_val
+    pct_change = (overall_change / start_val) * 100 if start_val != 0 else 0
+    
+    direction = "FLAT"
+    if pct_change > 5: direction = "UPWARD"
+    elif pct_change < -5: direction = "DOWNWARD"
+    
+    max_val = max(values)
+    min_val = min(values)
+    max_date = dates[values.index(max_val)]
+    min_date = dates[values.index(min_val)]
+    
+    # 4. Generate Conclusions
+    lines = [f"TREND ANALYSIS ({len(values)} periods):"]
+    lines.append(f"- Overall Trend: {direction} ({pct_change:+.1f}%)")
+    lines.append(f"- Start: {start_val:,.2f} ({dates[0]}) -> End: {end_val:,.2f} ({dates[-1]})")
+    lines.append(f"- Peak: {max_val:,.2f} in {max_date}")
+    lines.append(f"- Lowest: {min_val:,.2f} in {min_date}")
+    
+    # MoM Volatility
+    lines.append("\nSignificant Changes:")
+    for i in range(1, len(values)):
+        curr = values[i]
+        prev = values[i-1]
+        mom_change = ((curr - prev) / prev) * 100 if prev != 0 else 0
+        if abs(mom_change) > 10: # Only report significant >10% shifts
+            lines.append(f"- {dates[i]}: {mom_change:+.1f}% vs previous month")
+            
+    return "\n".join(lines)

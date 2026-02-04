@@ -60,6 +60,18 @@ async def get_declining_categories():
     # 3. Compare python side for simplicity (since sqlite w/o window functions or old versions can be tricky, 
     #    though recent sqlite supports window. Let's do python side logic for safety/simplicity with pandas).
     
+    try:
+        result = perform_decline_analysis()
+        if isinstance(result, dict) and "error" in result:
+             raise Exception(result["error"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def perform_decline_analysis():
+    """
+    Internal logic to Identify declining categories (Month-Over-Month).
+    """
     query = """
     SELECT 
         category,
@@ -71,12 +83,17 @@ async def get_declining_categories():
         with db.engine.connect() as conn:
             df = pd.read_sql(text(query), conn)
         
+        if df.empty: return []
+
         df['order_date'] = pd.to_datetime(df['order_date'])
         df['month'] = df['order_date'].dt.to_period('M')
         
         monthly_cat = df.groupby(['category', 'month'])['sales'].sum().reset_index()
         
         # Get last 2 months
+        if monthly_cat['month'].nunique() < 2:
+             return {"error": "Insufficient data history"}
+
         latest_month = monthly_cat['month'].max()
         prev_month = latest_month - 1
         
@@ -88,22 +105,29 @@ async def get_declining_categories():
             if cat in prev_data.index:
                 curr_sales = latest_data.loc[cat, 'sales']
                 old_sales = prev_data.loc[cat, 'sales']
-                if curr_sales < old_sales:
-                    declining.append({
-                        "category": cat,
-                        "current_month": str(latest_month),
-                        "previous_month": str(prev_month),
-                        "sales_change": round(((curr_sales - old_sales) / old_sales) * 100, 2),
-                        "current_sales": round(curr_sales, 2),
-                        "previous_sales": round(old_sales, 2)
-                    })
+                
+                # Calculate change
+                change_pct = round(((curr_sales - old_sales) / old_sales) * 100, 2)
+                
+                # We return ALL categories compared, but mark them.
+                # Or for this specific function name "declining", we can just return logic.
+                # User wants "Identify declining", so we return list and Main filters it.
+                
+                declining.append({
+                    "category": cat,
+                    "current_month": str(latest_month),
+                    "previous_month": str(prev_month),
+                    "sales_change": change_pct,
+                    "current_sales": round(curr_sales, 2),
+                    "previous_sales": round(old_sales, 2)
+                })
         
-        # Sort by biggest drop %
+        # Sort by biggest drop (most negative first)
         declining.sort(key=lambda x: x['sales_change'])
         
         return declining
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
 @router.get("/top-products")
 async def get_top_products():

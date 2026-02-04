@@ -17,3 +17,9 @@ transformers
 torch
 accelerate
 bitsandbytes
+# Chat History Dependencies
+aiomysql
+aiosqlite
+python-jose[cryptography]
+passlib[bcrypt]
+pydantic[email]
