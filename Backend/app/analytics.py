@@ -52,14 +52,6 @@ async def get_declining_categories():
     """
     Identifies categories where the latest month's sales are lower than the previous month's.
     """
-    # SQLite Query to compare last 2 months for each category
-    # Complex query: Get monthly sales per category, then lag comparison
-    # helping logic:
-    # 1. Get Month-Category Sales
-    # 2. Filter for top 2 recent months
-    # 3. Compare python side for simplicity (since sqlite w/o window functions or old versions can be tricky, 
-    #    though recent sqlite supports window. Let's do python side logic for safety/simplicity with pandas).
-    
     try:
         result = perform_decline_analysis()
         if isinstance(result, dict) and "error" in result:

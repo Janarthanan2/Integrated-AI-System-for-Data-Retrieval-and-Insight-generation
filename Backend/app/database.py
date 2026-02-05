@@ -17,9 +17,6 @@ class DatabaseManager:
         
         self.db_url = os.getenv("DATABASE_URL", f"sqlite:///{default_db_path}") 
         
-        # Handle MySQL vs SQLite (prototype flexibility)
-        print(f"DEBUG: Active Database URL: {self.db_url}")
-        
         if "mysql" in self.db_url:
              self.engine = create_engine(self.db_url, execution_options={"isolation_level": "READ UNCOMMITTED"})
         else:
@@ -394,12 +391,7 @@ class DatabaseManager:
             
             query_start = time.time()
             with self.engine.connect() as connection:
-                print(f"DEBUG: Executing SQL: {final_query}")
                 result = pd.read_sql(text(final_query), connection)
-                query_duration = time.time() - query_start
-                
-                print(f"DEBUG: SQL Query Time: {query_duration:.2f}s, Rows: {len(result)}")
-                
                 return result.to_dict(orient="records")
         except Exception as e:
             print(f"CRITICAL DB ERROR: {e}")

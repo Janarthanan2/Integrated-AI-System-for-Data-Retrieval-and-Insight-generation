@@ -61,7 +61,7 @@ try:
     database = DatabaseManager()
     retrieval = RetrievalManager()
     generation = GenerationManager()
-    extractor = QueryExtractor() # New Python-based extractor
+    extractor = QueryExtractor()
     print("All modules initialized successfully.")
 except Exception as e:
     print(f"Startup Error: {e}")
@@ -85,10 +85,8 @@ async def process_query(request: QueryRequest):
             print(f"DEBUG EXTRACTION: Intent={params.get('intent')} Filters={params.get('filters')} GroupBy={params.get('group_by')} Metrics={params.get('metrics')}")
             
             # Context Recovery Logic (Follow-up handling)
-            # If the user asks to "visualize it" or "show as line", but we found no entities,
-            # we try to grab the previous query's context.
-            # If the user asks to "visualize it" or "show as line", but we found no entities,
-            # we try to grab the previous query's context.
+            # If the user asks for a specific visualization but we found no entities,
+            # we attempt to recover context from the previous query.
             if params["intent"] == "LIST" or (not params["metrics"] and not params["filters"]): 
                  if any(k in user_query.lower() for k in ["visualize", "graph", "chart", "line", "bar", "pie", "scatter"]):
                      if request.history:
@@ -138,9 +136,8 @@ async def process_query(request: QueryRequest):
                 yield json.dumps({"type": "token", "chunk": "Hello! I am AI Data Analyst, your advanced AI analytics assistant. Ask me to analyze sales trends, show top products, or explain business strategies."}) + "\n"
                 return
 
-            context_data = ""
-            context_source = []
-            chart_metadata = None # For frontend chart rendering
+            # 2. Data Retrieval
+            chart_metadata = None
 
             # 2. Data Retrieval
             if intent in ["AGGREGATE", "TREND", "LIST", "DATABASE", "DIAGNOSTIC", "DIRECT"]:

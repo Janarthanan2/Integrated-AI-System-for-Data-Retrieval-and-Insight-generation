@@ -232,8 +232,6 @@ function AppContent() {
         }
     };
 
-    // Show auth modal if not loading and not authenticated
-    // const shouldShowAuthPrompt = !authLoading && !isAuthenticated; // No longer needed if we switch view
 
     if (!isAuthenticated) {
         return (
