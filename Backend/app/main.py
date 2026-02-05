@@ -174,6 +174,20 @@ async def process_query(request: QueryRequest):
                              
                              chart_metadata = {"type": params.get("visualization_type", "decline"), "data": declining_items}
 
+                    elif params["filters"].get("analysis_mode") == "lowest_month":
+                         # Lowest Month Analysis
+                         from .analytics import perform_lowest_month_analysis
+                         lowest_result = await perform_lowest_month_analysis(params["filters"])
+                         
+                         if "error" in lowest_result:
+                             context_data += f"ANALYSIS ERROR: {lowest_result['error']}\n"
+                         else:
+                             context_data += f"ANALYSIS CONCLUSION:\n{lowest_result['summary']}\n"
+                             factors_text = "\n".join([f"- {f['name']} contributed {f['impact']:+.2f}" for f in lowest_result.get('factors', [])])
+                             context_data += f"\nKey Factors for Performance:\n{factors_text}\n"
+                             
+                             chart_metadata = {"type": "rca", "data": lowest_result.get('factors', [])}
+
                     else:
                         # Standard RCA
                         rca_result = await perform_root_cause_analysis(params["filters"], metric)

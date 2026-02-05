@@ -133,6 +133,84 @@ async def perform_decline_analysis():
     """
     return await asyncio.to_thread(_perform_decline_analysis_sync)
 
+def _perform_lowest_month_analysis_sync(filters: dict = None):
+    """
+    Finds the month with the lowest sales and analyzes why it was low.
+    """
+    if filters is None: filters = {}
+    
+    # 1. Get Monthly Sales to find the lowest
+    year_clause = ""
+    params = {}
+    if "year" in filters:
+        year_clause = "WHERE substr(order_date, 1, 4) = :year"
+        params["year"] = str(filters["year"])
+        
+    query = f"""
+    SELECT 
+        substr(order_date, 1, 7) as month,
+        SUM(sales) as total_sales
+    FROM sales_data 
+    {year_clause}
+    GROUP BY substr(order_date, 1, 7)
+    ORDER BY total_sales ASC
+    LIMIT 1
+    """
+    
+    try:
+        with db.engine.connect() as conn:
+            df = pd.read_sql(text(query), conn, params=params)
+            
+        if df.empty:
+            return {"error": "No data available."}
+            
+        lowest_month = df.iloc[0]['month']
+        lowest_sales = df.iloc[0]['total_sales']
+        
+        # 2. Identify Comparison Month (Previous Month)
+        # Calculate previous month string
+        from datetime import datetime
+        # Parse month string 'YYYY-MM'
+        curr_dt = datetime.strptime(lowest_month, "%Y-%m")
+        # Subtract one month
+        if curr_dt.month == 1:
+            prev_dt = curr_dt.replace(year=curr_dt.year - 1, month=12)
+        else:
+            prev_dt = curr_dt.replace(month=curr_dt.month - 1)
+            
+        prev_month = prev_dt.strftime("%Y-%m")
+        
+        # 3. Perform Drill-Down Analysis (reuse RCA logic)
+        # We pass the specific months we want to compare
+        print(f"DEBUG: Analyzing Lowest Month {lowest_month} vs {prev_month}")
+        
+        rca = _perform_root_cause_analysis_sync(filters, target_months=(prev_month, lowest_month))
+        
+        if "error" in rca:
+            # Fallback if previous month doesn't exist (e.g. start of data)
+            # Maybe compare to yearly average? 
+            # For now, return what we have
+            return {
+                "intent": "DIAGNOSTIC",
+                "period": f"{lowest_month} (Lowest Month)",
+                "summary": f"The lowest performing month was {lowest_month} with sales of ${lowest_sales:,.2f}. {rca['error']}",
+                "factors": [],
+                "global_change": 0
+            }
+            
+        # Enrich the summary
+        rca["summary"] = f"The lowest performing month was {lowest_month} (${lowest_sales:,.2f}). " + rca["summary"]
+        return rca
+
+    except Exception as e:
+        return {"error": str(e)}
+
+async def perform_lowest_month_analysis(filters: dict = None):
+    """
+    Async wrapper for lowest month analysis.
+    """
+    return await asyncio.to_thread(_perform_lowest_month_analysis_sync, filters)
+
 @router.get("/top-products")
 async def get_top_products():
     """
@@ -174,7 +252,7 @@ async def optimize_schema():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def _perform_root_cause_analysis_sync(filters: dict = None, metric: str = "sales"):
+def _perform_root_cause_analysis_sync(filters: dict = None, metric: str = "sales", target_months: tuple = None):
     """
     Internal function to perform diagnostic analysis/drill-down on data.
     Identifies drivers of change between periods.
@@ -201,8 +279,24 @@ def _perform_root_cause_analysis_sync(filters: dict = None, metric: str = "sales
         if len(all_months) < 2:
             return {"error": "Insufficient history for trend analysis."}
             
-        current_month = all_months[-1]
-        prev_month = all_months[-2]
+        if target_months:
+            # Use requested months
+            if target_months[1] not in all_months:
+                 # If target month not in data, return valid error
+                 return {"error": f"Target month {target_months[1]} not found in data."}
+            
+            current_month = pd.Period(target_months[1], freq='M')
+            
+            if target_months[0] in all_months:
+                prev_month = pd.Period(target_months[0], freq='M')
+            else:
+                # If comparison month missing, maybe just use the one before target?
+                # Or return error?
+                return {"error": f"Comparison month {target_months[0]} not found (start of data?)."}
+        else:
+            # Default to last 2 months
+            current_month = all_months[-1]
+            prev_month = all_months[-2]
         
         # Filter if needed (e.g. if user asked "Why did East drop?")
         # We apply filtering in memory for now for complex intersection

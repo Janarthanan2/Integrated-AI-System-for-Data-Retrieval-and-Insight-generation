@@ -14,7 +14,7 @@ class QueryExtractor:
             "TREND": ["trend", "growth", "over time", "monthly", "year over year", "yoy", "history", "progress", "change", "month"],
             "LIST": ["list", "show", "what are", "names", "bottom", "table", "raw data"],
             "GREETING": ["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening"],
-            "DOCUMENT": ["how to", "policy", "strategy", "reason", "cause", "document", "report", "details", "explain"]
+            "DOCUMENT": ["how to", "policy", "strategy", "reason", "cause", "document", "report", "details", "explain", "impact", "affect", "effect", "analyze"]
         }
         
         # Dynamic column loading from database
@@ -208,6 +208,10 @@ class QueryExtractor:
             # RCA detection
             return self._handle_rca(query)
             
+        # NEW: Dynamic Lowest Month Analysis (Priority over generic decline)
+        if "lowest" in query_lower and "month" in query_lower and ("factor" in query_lower or "reason" in query_lower or "cause" in query_lower or "decline" in query_lower):
+            return self._handle_lowest_month_analysis(query)
+
         if ("identify" in query_lower or "which" in query_lower) and ("decline" in query_lower or "declining" in query_lower):
              # Decline Analysis detection
              return self._handle_decline_analysis(query)
@@ -390,4 +394,22 @@ class QueryExtractor:
             "metrics": ["sales"], # Default for RCA
             "group_by": [],
             "debug_info": {"mode": "RCA"}
+        }
+
+    def _handle_lowest_month_analysis(self, query: str) -> dict:
+        """Handle Dynamic Lowest Month Analysis requests."""
+        # Extract year if present
+        filters = {}
+        year_match = re.search(r'\b(20\d{2})\b', query)
+        if year_match:
+            filters["year"] = int(year_match.group(1))
+            
+        return {
+            "intent": "DIAGNOSTIC",
+            "filters": {"analysis_mode": "lowest_month", **filters},
+            "sanitized_query": query,
+            "visualization_type": "rca",
+            "metrics": ["sales"],
+            "group_by": ["month"],
+            "debug_info": {"mode": "LOWEST_MONTH_ANALYSIS"}
         }

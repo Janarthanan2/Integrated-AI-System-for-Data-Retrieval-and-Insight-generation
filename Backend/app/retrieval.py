@@ -25,9 +25,37 @@ class RetrievalManager:
              
         self.documents = []
         self.filenames = []
+        self.doc_metadata = [] # Store metadata for chunks (filename, chunk_index)
         self.embeddings = None
         
         self.load_documents()
+
+    def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50):
+        """
+        Splits text into chunks.
+        Strategy: Split by double newlines (paragraphs), then sub-chunk if too long.
+        """
+        chunks = []
+        paragraphs = text.split('\n\n')
+        
+        current_chunk = ""
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para: continue
+            
+            # Simple accumulation
+            if len(current_chunk) + len(para) < chunk_size:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = para + "\n\n"
+        
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+            
+        return chunks
 
     def load_documents(self):
         """Loads documents. Uses Disk Cache if available and valid."""
@@ -42,8 +70,9 @@ class RetrievalManager:
                     cache_data = pickle.load(f)
                     self.documents = cache_data['documents']
                     self.filenames = cache_data['filenames']
+                    self.doc_metadata = cache_data.get('doc_metadata', []) # Load metadata
                     self.embeddings = cache_data['embeddings']
-                print(f"Loaded {len(self.documents)} documents from cache.")
+                print(f"Loaded {len(self.documents)} chunks from cache.")
                 return 
             except Exception as e:
                 print(f"Cache load failed ({e}), rebuilding...")
@@ -59,8 +88,12 @@ class RetrievalManager:
                     with open(filepath, "r", encoding="utf-8") as f:
                         content = f.read()
                         if content.strip():
-                            self.documents.append(content)
-                            self.filenames.append(os.path.basename(filepath))
+                            # Chunking applied here
+                            file_chunks = self._chunk_text(content)
+                            for i, chunk in enumerate(file_chunks):
+                                self.documents.append(chunk)
+                                self.filenames.append(os.path.basename(filepath))
+                                self.doc_metadata.append({"filename": os.path.basename(filepath), "chunk_index": i})
                 except Exception as e:
                     print(f"Error reading {filepath}: {e}")
 
@@ -74,6 +107,7 @@ class RetrievalManager:
                     pickle.dump({
                         'documents': self.documents,
                         'filenames': self.filenames,
+                        'doc_metadata': self.doc_metadata,
                         'embeddings': self.embeddings
                     }, f)
                 print("Embedding complete and cached.")
@@ -105,7 +139,10 @@ class RetrievalManager:
         for score, idx in zip(top_results.values, top_results.indices):
             idx = int(idx)
             if score < 0.2: continue
-            results.append((self.filenames[idx], self.documents[idx], float(score))) # Return tuple
+            
+            # Enrich with metadata if available
+            meta = self.doc_metadata[idx] if idx < len(self.doc_metadata) else {}
+            results.append((self.filenames[idx], self.documents[idx], float(score), meta))
         return results
 
     def retrieve(self, query: str, top_k: int = 3):
@@ -117,4 +154,4 @@ class RetrievalManager:
         raw_results = self.retrieve_cached(norm_query, top_k)
         
         # Convert back to dict list
-        return [{"filename": r[0], "content": r[1], "score": r[2]} for r in raw_results]
+        return [{"filename": r[0], "content": r[1], "score": r[2], "metadata": r[3]} for r in raw_results]
