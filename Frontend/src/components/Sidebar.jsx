@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useConversations } from '../contexts/ConversationsContext';
 
-const Sidebar = ({ isOpen, onClose }) => {
+const Sidebar = ({ isOpen, onClose, theme = 'light' }) => {
     const {
         conversations,
         activeConversationId,
@@ -26,6 +26,18 @@ const Sidebar = ({ isOpen, onClose }) => {
         deleteConversation,
         updateTitle,
     } = useConversations();
+
+    const isDark = theme === 'dark';
+    const themeStyles = {
+        gradient: isDark ? 'linear-gradient(135deg, #22D3EE, #3B82F6)' : 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+        activeItemBg: isDark ? 'rgba(34, 211, 238, 0.1)' : '#FFE5E5',
+        activeIconColor: isDark ? '#22D3EE' : '#FF6B6B',
+        sidebarBg: isDark ? '#111827' : '#FAFAFA',
+        borderColor: isDark ? '#374151' : '#E5E7EB',
+        textPrimary: isDark ? '#F9FAFB' : '#1F2937',
+        textSecondary: isDark ? '#9CA3AF' : '#6B7280',
+        inputBg: isDark ? '#1F2937' : '#F3F4F6'
+    };
 
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
@@ -95,17 +107,17 @@ const Sidebar = ({ isOpen, onClose }) => {
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                backgroundColor: '#FAFAFA',
-                borderRight: '1px solid #E5E7EB',
+                backgroundColor: themeStyles.sidebarBg,
+                borderRight: `1px solid ${themeStyles.borderColor}`,
             }}
         >
             {/* Header */}
-            <div className="p-3 border-bottom">
+            <div className="p-3 border-bottom" style={{ borderColor: themeStyles.borderColor }}>
                 <button
                     onClick={startNewChat}
                     className="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2"
                     style={{
-                        background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+                        background: themeStyles.gradient,
                         border: 'none',
                         color: 'white',
                         borderRadius: '10px',
@@ -122,8 +134,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <div className="position-relative">
                     <Search
                         size={16}
-                        className="position-absolute text-muted"
-                        style={{ left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                        className="position-absolute"
+                        style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', color: themeStyles.textSecondary }}
                     />
                     <input
                         type="text"
@@ -133,9 +145,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                         className="form-control form-control-sm"
                         style={{
                             paddingLeft: '36px',
-                            backgroundColor: '#F3F4F6',
+                            backgroundColor: themeStyles.inputBg,
                             border: 'none',
                             borderRadius: '8px',
+                            color: themeStyles.textPrimary
                         }}
                     />
                 </div>
@@ -148,10 +161,10 @@ const Sidebar = ({ isOpen, onClose }) => {
             >
                 {isLoadingSidebar ? (
                     <div className="d-flex justify-content-center align-items-center py-4">
-                        <Loader size={24} className="text-muted animate-spin" />
+                        <Loader size={24} className="animate-spin" style={{ color: themeStyles.textSecondary }} />
                     </div>
                 ) : filteredConversations.length === 0 ? (
-                    <div className="text-center py-4 text-muted small">
+                    <div className="text-center py-4 small" style={{ color: themeStyles.textSecondary }}>
                         {searchQuery ? 'No matching conversations' : 'No conversations yet'}
                     </div>
                 ) : (
@@ -159,10 +172,9 @@ const Sidebar = ({ isOpen, onClose }) => {
                         <div
                             key={conv.id}
                             onClick={() => selectConversation(conv.id)}
-                            className={`conversation-item p-2 rounded-2 mb-1 cursor-pointer ${activeConversationId === conv.id ? 'active' : ''
-                                }`}
+                            className={`conversation-item p-2 rounded-2 mb-1 cursor-pointer`}
                             style={{
-                                backgroundColor: activeConversationId === conv.id ? '#FFE5E5' : 'transparent',
+                                backgroundColor: activeConversationId === conv.id ? themeStyles.activeItemBg : 'transparent',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                             }}
@@ -171,7 +183,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                                 <MessageSquare
                                     size={16}
                                     className="mt-1 flex-shrink-0"
-                                    style={{ color: activeConversationId === conv.id ? '#FF6B6B' : '#9CA3AF' }}
+                                    style={{ color: activeConversationId === conv.id ? themeStyles.activeIconColor : themeStyles.textSecondary }}
                                 />
 
                                 <div className="flex-grow-1 min-width-0">
@@ -183,7 +195,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                                                 onChange={(e) => setEditTitle(e.target.value)}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="form-control form-control-sm py-0"
-                                                style={{ fontSize: '13px' }}
+                                                style={{ fontSize: '13px', backgroundColor: themeStyles.inputBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.borderColor}` }}
                                                 autoFocus
                                             />
                                             <button
@@ -193,8 +205,9 @@ const Sidebar = ({ isOpen, onClose }) => {
                                                 <Check size={14} />
                                             </button>
                                             <button
-                                                className="btn btn-link p-0 text-muted"
+                                                className="btn btn-link p-0"
                                                 onClick={handleCancelEdit}
+                                                style={{ color: themeStyles.textSecondary }}
                                             >
                                                 <X size={14} />
                                             </button>
@@ -203,21 +216,21 @@ const Sidebar = ({ isOpen, onClose }) => {
                                         <>
                                             <div
                                                 className="fw-medium text-truncate"
-                                                style={{ fontSize: '13px', color: '#374151' }}
+                                                style={{ fontSize: '13px', color: themeStyles.textPrimary }}
                                             >
                                                 {conv.title}
                                             </div>
                                             {conv.last_message && (
                                                 <div
-                                                    className="text-truncate text-muted"
-                                                    style={{ fontSize: '11px' }}
+                                                    className="text-truncate"
+                                                    style={{ fontSize: '11px', color: themeStyles.textSecondary }}
                                                 >
                                                     {conv.last_message}
                                                 </div>
                                             )}
                                             <div
-                                                className="d-flex align-items-center gap-1 text-muted mt-1"
-                                                style={{ fontSize: '10px' }}
+                                                className="d-flex align-items-center gap-1 mt-1"
+                                                style={{ fontSize: '10px', color: themeStyles.textSecondary }}
                                             >
                                                 <Clock size={10} />
                                                 {formatTime(conv.updated_at)}
@@ -230,9 +243,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                                 {editingId !== conv.id && (
                                     <div className="conversation-actions d-flex gap-1">
                                         <button
-                                            className="btn btn-link p-1 text-muted"
+                                            className="btn btn-link p-1"
                                             onClick={(e) => handleStartEdit(e, conv)}
                                             title="Rename"
+                                            style={{ color: themeStyles.textSecondary }}
                                         >
                                             <Edit3 size={12} />
                                         </button>
@@ -257,8 +271,8 @@ const Sidebar = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className="p-2 border-top text-center">
-                <small className="text-muted" style={{ fontSize: '10px' }}>
+            <div className="p-2 border-top text-center" style={{ borderColor: themeStyles.borderColor }}>
+                <small style={{ fontSize: '10px', color: themeStyles.textSecondary }}>
                     {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
                 </small>
             </div>

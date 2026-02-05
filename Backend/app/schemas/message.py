@@ -51,7 +51,7 @@ class ArtifactCreate(BaseModel):
     type: Literal["chart", "table", "code"]
     chart_type: Optional[str] = None
     spec: Optional[Dict[str, Any]] = None
-    data_snapshot: Optional[Dict[str, Any]] = None
+    data_snapshot: Optional[Any] = None
 
 
 class ArtifactResponse(BaseModel):
@@ -61,7 +61,7 @@ class ArtifactResponse(BaseModel):
     type: str
     chart_type: Optional[str] = None
     spec: Optional[Dict[str, Any]] = None
-    data_snapshot: Optional[Dict[str, Any]] = None
+    data_snapshot: Optional[Any] = None
     created_at: datetime
 
     class Config:

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from .database import DatabaseManager
 import pandas as pd
 from sqlalchemy import text
+import asyncio
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 db = DatabaseManager()
@@ -20,9 +21,11 @@ async def get_monthly_sales():
     ORDER BY month ASC
     """
     try:
-        with db.engine.connect() as conn:
-            result = pd.read_sql(text(query), conn)
-        return result.to_dict(orient="records")
+        def _query():
+            with db.engine.connect() as conn:
+                result = pd.read_sql(text(query), conn)
+            return result.to_dict(orient="records")
+        return await asyncio.to_thread(_query)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -41,9 +44,11 @@ async def get_regional_performance():
     ORDER BY total_sales DESC
     """
     try:
-        with db.engine.connect() as conn:
-            result = pd.read_sql(text(query), conn)
-        return result.to_dict(orient="records")
+        def _query():
+            with db.engine.connect() as conn:
+                result = pd.read_sql(text(query), conn)
+            return result.to_dict(orient="records")
+        return await asyncio.to_thread(_query)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -53,14 +58,14 @@ async def get_declining_categories():
     Identifies categories where the latest month's sales are lower than the previous month's.
     """
     try:
-        result = perform_decline_analysis()
+        result = await perform_decline_analysis()
         if isinstance(result, dict) and "error" in result:
              raise Exception(result["error"])
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def perform_decline_analysis():
+def _perform_decline_analysis_sync():
     """
     Internal logic to Identify declining categories (Month-Over-Month).
     """
@@ -121,6 +126,13 @@ def perform_decline_analysis():
     except Exception as e:
         return {"error": str(e)}
 
+
+async def perform_decline_analysis():
+    """
+    Async wrapper for decline analysis.
+    """
+    return await asyncio.to_thread(_perform_decline_analysis_sync)
+
 @router.get("/top-products")
 async def get_top_products():
     """
@@ -137,9 +149,11 @@ async def get_top_products():
     LIMIT 10
     """
     try:
-        with db.engine.connect() as conn:
-            result = pd.read_sql(text(query), conn)
-        return result.to_dict(orient="records")
+        def _query():
+            with db.engine.connect() as conn:
+                result = pd.read_sql(text(query), conn)
+            return result.to_dict(orient="records")
+        return await asyncio.to_thread(_query)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -151,17 +165,16 @@ async def optimize_schema():
     Dynamically analyzes the sales_data table and returns SQL optimization commands.
     """
     try:
-        # Load entire dataset for analysis (in production run sample or use schema inspection)
-        # Since we need cardinality, we load data.
-        with db.engine.connect() as conn:
-            df = pd.read_sql("SELECT * FROM sales_data", conn)
-            
-        sql_commands = generate_dynamic_optimization(df, "sales_data")
+        def _analyze():
+            with db.engine.connect() as conn:
+                df = pd.read_sql("SELECT * FROM sales_data", conn)
+            return generate_dynamic_optimization(df, "sales_data")
+        sql_commands = await asyncio.to_thread(_analyze)
         return {"sql_commands": sql_commands}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def perform_root_cause_analysis(filters: dict = None, metric: str = "sales"):
+def _perform_root_cause_analysis_sync(filters: dict = None, metric: str = "sales"):
     """
     Internal function to perform diagnostic analysis/drill-down on data.
     Identifies drivers of change between periods.
@@ -255,3 +268,10 @@ def perform_root_cause_analysis(filters: dict = None, metric: str = "sales"):
 
     except Exception as e:
         return {"error": str(e)}
+
+
+async def perform_root_cause_analysis(filters: dict = None, metric: str = "sales"):
+    """
+    Async wrapper for root cause analysis.
+    """
+    return await asyncio.to_thread(_perform_root_cause_analysis_sync, filters, metric)

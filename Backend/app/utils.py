@@ -35,6 +35,13 @@ def summarize_data(data_list):
         return "DATA: " + ", ".join(parts)
     
     # 1. Formatting for prompt (Markdown Table preferred for structure)
+    # 1. Formatting for prompt (Markdown Table preferred for structure)
+    # TRUNCATE to Top 5 rows to ensure concise LLM response
+    display_limit = 5
+    is_truncated = count > display_limit
+    
+    visible_data = data_list[:display_limit]
+    
     lines = []
     # Header
     headers = list(data_list[0].keys())
@@ -42,9 +49,12 @@ def summarize_data(data_list):
     lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
     
     # Rows
-    for row in data_list:
+    for row in visible_data:
         values = [format_value(row.get(h), h) for h in headers]
         lines.append("| " + " | ".join(values) + " |")
+        
+    if is_truncated:
+        lines.append(f"\n... and {count - display_limit} more rows (Full data available in the Chart). Focus your answer on the top items.")
         
     return "\n".join(lines)
 

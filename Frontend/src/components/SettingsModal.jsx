@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { X, Trash2, Zap, Palette, Monitor, Info, ChevronRight, Moon, Sun, Check } from 'lucide-react';
+import { X, Trash2, Palette, Monitor, Info, ChevronRight, Moon, Sun } from 'lucide-react';
 
-export default function SettingsModal({ show, onClose, onClearHistory }) {
+export default function SettingsModal({ show, onClose, onClearHistory, currentTheme, onThemeChange }) {
     const [animateIn, setAnimateIn] = useState(false);
-    const [theme, setTheme] = useState('light');
 
     useEffect(() => {
         if (show) {
@@ -14,8 +13,6 @@ export default function SettingsModal({ show, onClose, onClearHistory }) {
     }, [show]);
 
     if (!show) return null;
-
-    const primaryGradient = 'linear-gradient(135deg, #FF6B6B, #FF8E53)';
 
     return (
         <div
@@ -59,29 +56,34 @@ export default function SettingsModal({ show, onClose, onClearHistory }) {
                 {/* Body */}
                 <div className="p-4 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
 
-                    {/* Appearance Section (Mockup) */}
+                    {/* Appearance Section */}
                     <div className="mb-4">
                         <label className="small fw-bold text-secondary text-uppercase tracking-wider mb-3 d-block ps-1">Appearance</label>
                         <div className="bg-light rounded-4 p-1 d-flex mb-3 border">
                             <button
-                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${theme === 'light' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
-                                onClick={() => setTheme('light')}
+                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${currentTheme === 'light' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
+                                onClick={() => onThemeChange('light')}
                             >
                                 <Sun size={16} /> Light
                             </button>
                             <button
-                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${theme === 'dark' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
-                                onClick={() => setTheme('dark')}
+                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${currentTheme === 'dark' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
+                                onClick={() => onThemeChange('dark')}
                             >
                                 <Moon size={16} /> Dark
                             </button>
                             <button
-                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${theme === 'system' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
-                                onClick={() => setTheme('system')}
+                                className={`btn border-0 flex-grow-1 py-2 rounded-3 d-flex align-items-center justify-content-center gap-2 fw-medium transition-all ${currentTheme === 'system' ? 'bg-white shadow-sm text-dark' : 'text-muted'}`}
+                                onClick={() => onThemeChange('system')}
                             >
                                 <Monitor size={16} /> System
                             </button>
                         </div>
+                        <p className="small text-muted mb-0 ps-1">
+                            {currentTheme === 'system'
+                                ? 'Theme will follow your system preferences'
+                                : `Using ${currentTheme} theme`}
+                        </p>
                     </div>
 
                     {/* Data Control Section */}
@@ -110,27 +112,6 @@ export default function SettingsModal({ show, onClose, onClearHistory }) {
                             </button>
                         </div>
                     </div>
-
-                    {/* Labs Section */}
-                    <div className="mb-4">
-                        <div className="d-flex align-items-center justify-content-between mb-3 ps-1">
-                            <label className="small fw-bold text-secondary text-uppercase tracking-wider d-block mb-0">Experimental</label>
-                            <span className="badge bg-gradient-primary rounded-pill px-2 py-1" style={{ fontSize: '10px', background: primaryGradient }}>PRO</span>
-                        </div>
-
-                        <div className="p-3 rounded-4 border border-light bg-light d-flex align-items-center gap-3 opacity-75">
-                            <div className="p-2 rounded-3 bg-white shadow-sm">
-                                <Zap size={20} className="text-warning" fill="currentColor" />
-                            </div>
-                            <div className="flex-grow-1">
-                                <span className="d-block fw-semibold text-dark">Turbo Response Mode</span>
-                                <span className="small text-muted">Skip verification steps for faster answers</span>
-                            </div>
-                            <div className="form-check form-switch">
-                                <input className="form-check-input" type="checkbox" disabled />
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Footer */}
@@ -142,11 +123,3 @@ export default function SettingsModal({ show, onClose, onClearHistory }) {
         </div>
     );
 }
-
-// Add required styles
-const styles = `
-.hover-bg-danger-subtle:hover {
-    background-color: #fff5f5 !important;
-    border-color: #feb2b2 !important;
-}
-`;

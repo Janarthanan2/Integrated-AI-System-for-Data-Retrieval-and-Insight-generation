@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import time
+import asyncio
 from .fuzzy_utils import fuzzy_clean_query
 
 load_dotenv()
@@ -54,10 +55,10 @@ class DatabaseManager:
             print(f"WARN: Failed to load dynamic entities: {e}")
     
     
-    def query_dynamic(self, params: dict):
+    def _query_dynamic_sync(self, params: dict):
         """
-        Constructs and executes a safe SQL query based on structured parameters.
-        Pushing aggregation to the database engine (SQLite) for performance and correctness.
+        Synchronous implementation: Constructs and executes a safe SQL query.
+        This is wrapped by the async query_dynamic method.
         """
         try:
             intent = params.get("intent", "LIST")
@@ -138,7 +139,8 @@ class DatabaseManager:
             # --- 2. Intent Handling ---
             
             # Special Handling for Advanced Visualizations
-            viz_type = params.get("visualization_type", "").lower()
+            # Handle None safely (params["visualization_type"] might be None)
+            viz_type = (params.get("visualization_type") or "").lower()
             
             if viz_type in ["box_plot", "violin"]:
                 # Distribution Analysis: Requires Raw Data calculation -> Quartiles
@@ -219,17 +221,22 @@ class DatabaseManager:
                 group_clause_items = []
                 
                 for g in group_by:
-                    if g == "date":
-                        # Monthly trend default for aggregates involving date
+                    if g == "date" or g == "month":
+                        # Monthly grouping (derived from order_date)
                         select_groups.append("substr(order_date, 1, 7) as month")
                         group_clause_items.append("month")
+                    elif g == "year":
+                        # Yearly grouping (derived from order_date)
+                        select_groups.append("substr(order_date, 1, 4) as year")
+                        group_clause_items.append("year")
                     elif g == "quarter":
                         if "mysql" in self.db_url.lower():
                             select_groups.append("CONCAT('Q', QUARTER(order_date)) as quarter")
                         else:
                             select_groups.append("'Q' || ((CAST(substr(order_date, 6, 2) AS INTEGER) + 2) / 3) as quarter")
                         group_clause_items.append("quarter")
-                    elif g in ["region", "category", "sub_category", "state", "city", "product_name", "segment"]:
+                    else:
+                         # Dynamic: Accept any column as groupable
                          # Map specific internal names to DB columns if needed
                          col = g
                          if g == "product_name": col = "sub_category" # Fallback: No product column in schema
@@ -269,12 +276,32 @@ class DatabaseManager:
             
             if df.empty:
                 return []
+
+            # Post-processing: Format Dates
+            # Convert 'YYYY-MM' strings in 'month' column to 'Month Year' (e.g., January 2023)
+            if 'month' in df.columns:
+                try:
+                    # Convert to datetime objects
+                    df['month_dt'] = pd.to_datetime(df['month'])
+                    # Format as "January 2023"
+                    df['month'] = df['month_dt'].dt.strftime('%B %Y')
+                    # Remove temporary column
+                    df = df.drop(columns=['month_dt'])
+                except Exception as e:
+                    print(f"WARN: Failed to format month column: {e}")
                 
             return df.to_dict(orient="records")
             
         except Exception as e:
             print(f"PYTHON QUERY ERROR: {e}")
             return {"error": str(e)}
+
+    async def query_dynamic(self, params: dict):
+        """
+        Async wrapper for query_dynamic.
+        Runs the blocking SQL query in a thread pool to avoid blocking the event loop.
+        """
+        return await asyncio.to_thread(self._query_dynamic_sync, params)
 
     def get_kpi(self, filters: dict, metrics: list):
         """

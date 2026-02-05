@@ -21,10 +21,13 @@
   Highlight: #F43F5E (Rose)
 */
 
-:root {
+:root,
+.light-theme {
     --theme-bg: #FFFFFF;
     --theme-text: #1F2937;
     --theme-primary: #F43F5E;
+    --theme-secondary: #F3F4F6;
+    --theme-border: #E5E7EB;
 
     --bubble-user-bg: #111827;
     --bubble-user-text: #FFFFFF;
@@ -34,6 +37,47 @@
 
     --input-bg: rgba(255, 255, 255, 0.8);
     --glass-border: rgba(0, 0, 0, 0.05);
+
+    --sidebar-bg: #FFFFFF;
+    --sidebar-hover: #F3F4F6;
+    --sidebar-active: #FFE5E5;
+
+    --modal-bg: #FFFFFF;
+    --card-bg: #FFFFFF;
+}
+
+.dark-theme {
+    --theme-bg: #0B1220;
+    --theme-text: #E5E7EB;
+    --theme-primary: #22D3EE;
+    --theme-secondary: #111827;
+    --theme-border: #1F2937;
+
+    --theme-glow: #67E8F9;
+
+    --bubble-user-bg: #22D3EE;
+    --bubble-user-text: #0B1220;
+
+    --bubble-bot-bg: #111827;
+    --bubble-bot-text: #E5E7EB;
+
+    --input-bg: #111827;
+    --glass-border: #1F2937;
+
+    --sidebar-bg: #0B1220;
+    --sidebar-hover: #1F2937;
+    --sidebar-active: rgba(34, 211, 238, 0.15);
+
+    --modal-bg: #111827;
+    --card-bg: #111827;
+
+    --muted-text: #9CA3AF;
+    --accent-secondary: #3B82F6;
+}
+
+.dark-theme body {
+    background-color: var(--theme-bg);
+    color: var(--theme-text);
 }
 
 body {
@@ -41,6 +85,7 @@ body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background-color: var(--theme-bg);
     color: var(--theme-text);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom Scrollbar for Light Theme */
@@ -143,6 +188,58 @@ code {
     background: rgba(0, 0, 0, 0.3);
     padding: 2px 6px;
     border-radius: 4px;
+}
+
+/* Markdown Table Styles */
+.md-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.md-table thead {
+    background: linear-gradient(135deg, #F43F5E, #FB7185);
+    color: white;
+}
+
+.md-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.md-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.md-table tbody tr:nth-child(even) {
+    background-color: #F9FAFB;
+}
+
+.md-table tbody tr:hover {
+    background-color: #FEE2E2;
+}
+
+.dark-theme .md-table thead {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6);
+}
+
+.dark-theme .md-table td {
+    border-bottom-color: #1F2937;
+}
+
+.dark-theme .md-table tbody tr:nth-child(even) {
+    background-color: #0F172A;
+}
+
+.dark-theme .md-table tbody tr:hover {
+    background-color: rgba(34, 211, 238, 0.1);
 }
 
 /* ============================================
@@ -293,4 +390,330 @@ input:focus-visible {
     transition-property: background-color, border-color, color, fill, stroke;
     transition-duration: 0.15s;
     transition-timing-function: ease;
+}
+
+/* ============================================
+   Dark Theme Overrides
+   ============================================ */
+
+.dark-theme .bg-white {
+    background-color: var(--theme-bg) !important;
+}
+
+.dark-theme .bg-light {
+    background-color: var(--theme-secondary) !important;
+}
+
+.dark-theme .text-dark {
+    color: var(--theme-text) !important;
+}
+
+.dark-theme .text-muted {
+    color: var(--muted-text) !important;
+}
+
+.dark-theme .border-bottom,
+.dark-theme .border-top,
+.dark-theme .border {
+    border-color: var(--theme-border) !important;
+}
+
+.dark-theme .nova-card,
+.dark-theme .rounded-4.bg-white {
+    background-color: var(--card-bg) !important;
+    border-color: var(--theme-border) !important;
+}
+
+.dark-theme .sidebar {
+    background-color: var(--sidebar-bg) !important;
+}
+
+.dark-theme .conversation-item:hover {
+    background-color: var(--sidebar-hover) !important;
+}
+
+.dark-theme .conversation-item.active {
+    background-color: var(--sidebar-active) !important;
+}
+
+.dark-theme .auth-modal .modal-content,
+.dark-theme .rounded-4.shadow-lg {
+    background-color: var(--modal-bg) !important;
+}
+
+.dark-theme .btn-light {
+    background-color: var(--theme-secondary) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text) !important;
+}
+
+.dark-theme .btn-outline-danger {
+    color: #FCA5A5 !important;
+    border-color: #991B1B !important;
+}
+
+.dark-theme .btn-outline-danger:hover {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb {
+    background: #1F1F1F;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb:hover {
+    background: #2A2A2A;
+}
+
+.dark-theme .skeleton {
+    background: linear-gradient(90deg, #121212 25%, #1F1F1F 50%, #121212 75%);
+    background-size: 200% 100%;
+}
+
+.dark-theme code {
+    background: #1F1F1F;
+    color: var(--accent-secondary);
+}
+
+.dark-theme .form-control {
+    background-color: var(--theme-secondary);
+    border-color: var(--theme-border);
+    color: var(--theme-text);
+}
+
+.dark-theme .form-control:focus {
+    background-color: var(--theme-secondary);
+    border-color: var(--theme-primary);
+    color: var(--theme-text);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.dark-theme .hover-bg-danger-subtle:hover {
+    background-color: rgba(127, 29, 29, 0.3) !important;
+}
+
+/* Glow Effects & Accents */
+.dark-theme .btn-primary,
+.dark-theme .bg-primary {
+    background-color: var(--theme-primary) !important;
+    border-color: var(--theme-primary) !important;
+    color: #0B1220 !important;
+    box-shadow: 0 0 15px -3px var(--theme-glow);
+}
+
+.dark-theme .text-primary {
+    color: var(--theme-primary) !important;
+}
+
+/* Gradient buttons rewrite for Dark Mode (Cyan/Blue) */
+.dark-theme [style*="linear-gradient(135deg, #FF6B6B"],
+.dark-theme [style*="background: linear-gradient(135deg, rgb(255, 107, 107)"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    box-shadow: 0 0 20px -5px var(--theme-glow);
+}
+
+/* Hard override for inline gray text in header */
+.dark-theme span[style*="#374151"],
+.dark-theme span[style*="rgb(55, 65, 81)"] {
+    color: var(--theme-text) !important;
+}
+
+/* Tailwind/Bootstrap text override */
+.dark-theme .text-gray-900 {
+    color: var(--theme-text) !important;
+}
+
+/* Add specialized glow utility */
+.glow-text {
+    text-shadow: 0 0 10px var(--theme-glow);
+}
+
+/* ==========================================================================
+   COMPONENT SPECIFIC OVERRIDES (High Specificity to beat inline styles)
+   ========================================================================== */
+
+/* 1. App Header Logo & Title */
+.dark-theme [style*="linear-gradient(135deg, #FF6B6B"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    box-shadow: 0 0 15px -3px var(--theme-glow);
+}
+
+.dark-theme .d-flex.align-items-center.justify-content-between.p-2.px-3.border-bottom {
+    background-color: var(--theme-bg) !important;
+    border-bottom-color: var(--theme-border) !important;
+}
+
+.dark-theme [style*="color: rgb(55, 65, 81)"],
+.dark-theme [style*="color: #374151"] {
+    color: var(--theme-text) !important;
+}
+
+/* 2. Chat Input Container */
+.dark-theme .p-4.bg-white.border-top {
+    background-color: var(--theme-bg) !important;
+    border-top-color: var(--theme-border) !important;
+}
+
+/* The pill container around the input */
+.dark-theme .d-flex.align-items-center.gap-2.px-3.py-2 {
+    background: #111827 !important;
+    /* Surface color */
+    border-color: #22D3EE !important;
+    /* Cyan border */
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.2) !important;
+    /* Cyan glow */
+}
+
+/* Input Textarea */
+.dark-theme textarea {
+    color: #E5E7EB !important;
+}
+
+.dark-theme textarea::placeholder {
+    color: #9CA3AF !important;
+}
+
+/* Microphone & Plus Buttons in Input */
+.dark-theme .btn.p-0.text-rose-500,
+.dark-theme .btn.p-0.text-gray-500 {
+    background-color: #1F2937 !important;
+    border-color: #374151 !important;
+    color: #9CA3AF !important;
+}
+
+.dark-theme .btn.p-0.text-rose-500:hover,
+.dark-theme .btn.p-0.text-gray-500:hover {
+    color: #22D3EE !important;
+    border-color: #22D3EE !important;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.4) !important;
+}
+
+/* Send Button (Gradient override) */
+.dark-theme .btn.p-0.rounded-circle.text-white[style*="linear-gradient"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    box-shadow: 0 0 15px var(--theme-glow) !important;
+}
+
+/* 3. Empty State (Chat History) */
+/* "How can I help you?" Gradient Text */
+.dark-theme h1[style*="linear-gradient"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.4)) !important;
+}
+
+/* Suggestion Chips */
+.dark-theme button[style*="linear-gradient(to bottom right"] {
+    background: #1F2937 !important;
+    border-color: #374151 !important;
+    color: #E5E7EB !important;
+}
+
+.dark-theme button[style*="linear-gradient(to bottom right"]:hover {
+    border-color: #22D3EE !important;
+    color: #22D3EE !important;
+    background: rgba(34, 211, 238, 0.1) !important;
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.3) !important;
+}
+
+/* Sparkles Icon in Center */
+.dark-theme .text-rose-500 {
+    color: #22D3EE !important;
+}
+
+.dark-theme [style*="radial-gradient(circle, rgba(244, 63, 94, 0.2)"] {
+    background: radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 70%) !important;
+}
+
+.dark-theme .border-rose-100 {
+    border-color: #1F2937 !important;
+    background-color: #111827 !important;
+}
+
+/* 4. Chat Bubbles */
+/* User Bubble Gradient override */
+.dark-theme .p-3.px-4.shadow-sm[style*="linear-gradient"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    /* Blue/Cyan Gradient for User */
+    color: #0B1220 !important;
+    /* Dark text on bright bubble */
+    box-shadow: 0 4px 15px rgba(34, 211, 238, 0.3) !important;
+}
+
+/* Bot Bubble */
+.dark-theme .p-4.shadow-sm[style*="var(--bubble-bot-bg)"] {
+    background-color: #111827 !important;
+    border-color: #1F2937 !important;
+    color: #E5E7EB !important;
+}
+
+/* 5. Sidebar New Chat Button */
+.dark-theme button[style*="linear-gradient(135deg, #FF6B6B"] {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    box-shadow: 0 4px 15px rgba(34, 211, 238, 0.2) !important;
+}
+
+/* ==========================================================================
+   GLOBAL UTILITY OVERRIDES (Dark Mode Compatibility)
+   ========================================================================== */
+.dark-theme .bg-white {
+    background-color: var(--theme-secondary) !important;
+    color: var(--theme-text) !important;
+}
+
+.dark-theme .bg-light,
+.dark-theme [style*="#F9FAFB"],
+.dark-theme [style*="background-color: #F9FAFB"] {
+    background-color: var(--theme-bg) !important;
+    color: var(--theme-text) !important;
+}
+
+.dark-theme .text-dark,
+.dark-theme .text-gray-900 {
+    color: var(--theme-text) !important;
+}
+
+.dark-theme .text-secondary,
+.dark-theme .text-muted,
+.dark-theme .text-gray-500 {
+    color: var(--muted-text) !important;
+}
+
+.dark-theme .border-light,
+.dark-theme .border-bottom {
+    border-color: var(--theme-border) !important;
+}
+
+/* Dark Theme Overrides for Auth Modal Tabs */
+.dark-theme .auth-modal .nav-tabs .nav-link.active {
+    background: linear-gradient(135deg, #22D3EE, #3B82F6) !important;
+    color: white !important;
+    border-color: transparent !important;
+}
+
+.dark-theme .auth-modal .nav-tabs .nav-link:not(.active) {
+    color: #9CA3AF !important;
+    /* Gray 400 */
+}
+
+.dark-theme .auth-modal .nav-tabs .nav-link:not(.active):hover {
+    background-color: #374151 !important;
+    /* Gray 700 */
+    color: #F3F4F6 !important;
+    /* Gray 100 */
+    border-color: transparent !important;
+}
+
+/* Ensure labels are visible in dark mode auth modal */
+.dark-theme .auth-modal .form-label {
+    color: #E5E7EB !important;
+    /* Gray 200 */
+}
+
+/* Ensure placeholders are visible in dark mode auth modal */
+.dark-theme .auth-modal .form-control::placeholder {
+    color: #9CA3AF !important;
+    /* Gray 400 */
+    opacity: 1;
 }

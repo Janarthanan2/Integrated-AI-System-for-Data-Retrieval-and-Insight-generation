@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Container } from 'react-bootstrap';
-import { Sparkles, Settings, Menu, LogOut, User, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Sparkles, Settings, LogOut, User, PanelLeftClose, PanelLeft, Sun, Moon } from 'lucide-react';
 import SettingsModal from './components/SettingsModal';
 import ChatInput from './components/ChatInput';
 import ChatHistory from './components/ChatHistory';
@@ -8,23 +8,20 @@ import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ConversationsProvider, useConversations } from './contexts/ConversationsContext';
-import { API_URL, authHeaders, getAuthToken } from './api/config';
+import { API_URL, authHeaders } from './api/config';
 import * as conversationsApi from './api/conversations';
 
 import { LandingPage } from './components/LandingPage';
 
 // Inner App component that uses contexts
 function AppContent() {
-    const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+    const { user, isAuthenticated, logout } = useAuth();
     const {
         activeConversationId,
         messages,
         createNewConversation,
         startNewChat,
-        addMessage,
-        updateLastMessage,
         updateSidebarItem,
-        selectConversation,
     } = useConversations();
 
     const [query, setQuery] = useState("");
@@ -35,15 +32,80 @@ function AppContent() {
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
+    // Theme State
+    const [theme, setTheme] = useState(() => {
+        return localStorage.getItem('theme') || 'dark';
+    });
+
+    // Apply theme to document
+    const applyTheme = (selectedTheme) => {
+        const root = document.documentElement;
+        let effectiveTheme = selectedTheme;
+
+        if (selectedTheme === 'system') {
+            effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        if (effectiveTheme === 'dark') {
+            root.classList.add('dark-theme');
+            root.classList.remove('light-theme');
+        } else {
+            root.classList.add('light-theme');
+            root.classList.remove('dark-theme');
+        }
+    };
+
+    // Handle theme change
+    const handleThemeChange = (newTheme) => {
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        applyTheme(newTheme);
+    };
+
+    // Apply theme on mount and listen for system preference changes
+    useEffect(() => {
+        applyTheme(theme);
+
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleSystemChange = () => {
+            if (theme === 'system') {
+                applyTheme('system');
+            }
+        };
+
+        mediaQuery.addEventListener('change', handleSystemChange);
+        return () => mediaQuery.removeEventListener('change', handleSystemChange);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        // Cycle: light -> dark -> system -> light (or just light/dark for the toggle)
+        // For simplicity, let's just toggle between light and dark when using the header icon
+        if (theme === 'light' || theme === 'system') {
+            handleThemeChange('dark');
+        } else {
+            handleThemeChange('light');
+        }
+    };
+
     // Sync messages from context to local history when conversation changes
     useEffect(() => {
         if (isAuthenticated && messages.length > 0) {
             // Convert API messages to local format
-            const convertedHistory = messages.map(msg => ({
-                role: msg.role,
-                content: msg.content,
-                chart: msg.artifacts?.find(a => a.type === 'chart')?.spec || null,
-            }));
+            const convertedHistory = messages.map(msg => {
+                const chartArtifact = msg.artifacts?.find(a => a.type === 'chart');
+                let chart = null;
+                if (chartArtifact) {
+                    chart = {
+                        type: chartArtifact.chart_type,
+                        data: chartArtifact.data_snapshot || chartArtifact.spec
+                    };
+                }
+                return {
+                    role: msg.role,
+                    content: msg.content,
+                    chart: chart,
+                };
+            });
             setHistory(convertedHistory);
         }
     }, [messages, isAuthenticated]);
@@ -212,8 +274,17 @@ function AppContent() {
 
                     // Save chart artifact if present
                     if (assistantMsg.chart) {
-                        // Note: This would require the message_id from the saved message
-                        // For now, charts are stored in the message content/response
+                        try {
+                            await conversationsApi.createArtifact({
+                                message_id: savedMsg.message_id,
+                                conversation_id: currentConversationId,
+                                type: 'chart',
+                                chart_type: assistantMsg.chart.type,
+                                data_snapshot: assistantMsg.chart.data
+                            });
+                        } catch (aErr) {
+                            console.error("Failed to save artifact:", aErr);
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to save assistant message:', err);
@@ -239,10 +310,13 @@ function AppContent() {
                 <LandingPage
                     onLogin={() => setShowAuthModal(true)}
                     onSignup={() => setShowAuthModal(true)}
+                    currentTheme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
+                    onToggleTheme={toggleTheme}
                 />
                 <AuthModal
                     show={showAuthModal}
                     onClose={() => setShowAuthModal(false)}
+                    theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
                 />
             </>
         );
@@ -253,7 +327,11 @@ function AppContent() {
 
             {/* Sidebar (Conversation History) - Only show if authenticated */}
             {isAuthenticated && sidebarOpen && (
-                <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+                <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                    theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
+                />
             )}
 
             {/* Main Chat Area */}
@@ -276,7 +354,8 @@ function AppContent() {
                                 style={{
                                     width: '36px',
                                     height: '36px',
-                                    background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)'
+                                    background: 'linear-gradient(135deg, #22D3EE, #3B82F6)',
+                                    boxShadow: '0 0 10px rgba(34, 211, 238, 0.4)'
                                 }}>
                                 <Sparkles size={18} className="text-white" />
                             </div>
@@ -285,6 +364,15 @@ function AppContent() {
                     </div>
 
                     <div className="d-flex align-items-center gap-2">
+                        {/* Global Theme Toggle */}
+                        <button
+                            onClick={toggleTheme}
+                            className="btn btn-link p-1 text-muted"
+                            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        >
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                        </button>
+
                         {isAuthenticated ? (
                             <>
                                 <span className="small text-muted d-none d-md-inline">
@@ -310,7 +398,7 @@ function AppContent() {
                                 onClick={() => setShowAuthModal(true)}
                                 className="btn btn-sm px-3 py-1"
                                 style={{
-                                    background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+                                    background: theme === 'light' ? 'linear-gradient(135deg, #FF6B6B, #FF8E53)' : 'linear-gradient(135deg, #22D3EE, #3B82F6)',
                                     border: 'none',
                                     color: 'white',
                                     borderRadius: '8px',
@@ -330,6 +418,7 @@ function AppContent() {
                         history={history}
                         isLoading={isLoading}
                         onQuickAction={handleQuickAction}
+                        theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
                     />
 
                     <ChatInput
@@ -348,11 +437,14 @@ function AppContent() {
                 show={showSettings}
                 onClose={() => setShowSettings(false)}
                 onClearHistory={handleClearHistory}
+                currentTheme={theme}
+                onThemeChange={handleThemeChange}
             />
 
             <AuthModal
                 show={showAuthModal}
                 onClose={() => setShowAuthModal(false)}
+                theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
             />
         </div>
     );

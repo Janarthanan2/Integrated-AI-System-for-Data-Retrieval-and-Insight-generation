@@ -19,6 +19,13 @@ def load_embedding_model():
             print(f"WARN: Model load failed, falling back to CPU: {e}")
             MODEL = SentenceTransformer('all-MiniLM-L6-v2', device="cpu")
 
+def get_semantic_model():
+    """Returns the loaded embedding model for use in other modules."""
+    global MODEL
+    if MODEL is None:
+        load_embedding_model()
+    return MODEL
+
 def set_valid_entities(entities: list):
     """
     Updates the list of valid entities and pre-computes their embeddings.

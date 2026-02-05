@@ -77,54 +77,60 @@ async def process_query(request: QueryRequest):
         start_time = time.time()
         user_query = request.query
         
+        # Initialize variables to avoid UnboundLocalError
+        intent = "UNKNOWN"
+        context_data = ""
+        print(f"DEBUG: Processing query: {user_query}")
+        
 
         
         try:
             # 1. Intent & Parameter Extraction
             params = extractor.extract_parameters(user_query)
-            print(f"DEBUG EXTRACTION: Intent={params.get('intent')} Filters={params.get('filters')} GroupBy={params.get('group_by')} Metrics={params.get('metrics')}")
+            print(f"DEBUG EXTRACTION: Intent={params.get('intent')} Filters={params.get('filters')} GroupBy={params.get('group_by')} Metrics={params.get('metrics')} Viz={params.get('visualization_type')}")
             
             # Context Recovery Logic (Follow-up handling)
-            # If the user asks for a specific visualization but we found no entities,
-            # we attempt to recover context from the previous query.
-            if params["intent"] == "LIST" or (not params["metrics"] and not params["filters"]): 
-                 if any(k in user_query.lower() for k in ["visualize", "graph", "chart", "line", "bar", "pie", "scatter"]):
-                     if request.history:
-                         # Find the last USER message (before this one)
-                         # History structure: [{"role": "user", "content": "..."}, ...]
-                         # This request.history might include the current query at the end? Protocol check.
-                         # Assuming history contains PREVIOUS turns.
-                         reversed_hist = request.history[::-1]
-                         last_user_msg = next((m for m in reversed_hist if m['role'] == 'user' and m['content'] != user_query), None)
-                         
-                         if last_user_msg:
-                             print(f"Recovering context from previous query: {last_user_msg['content']}")
-                             prev_params = extractor.extract_parameters(last_user_msg['content'])
-                             
-                             # Merge: Keep previous intent/filters/metrics, but override viz type from current
-                             params["intent"] = prev_params["intent"]
-                             params["filters"] = prev_params["filters"]
-                             params["metrics"] = prev_params["metrics"]
-                             params["group_by"] = prev_params["group_by"]
-                             # Only override viz type if we detected a specific one in current
-                             if "line" in user_query.lower() or "trend" in user_query.lower():
-                                 params["visualization_type"] = "line"
-                                 # If switching to trend/line, we might need to force the intent to TREND if it was DIAGNOSTIC
-                                 if params["intent"] == "DIAGNOSTIC":
-                                     # DIAGNOSTIC data (2 months) as Line? Techincally yes. 
-                                     # But maybe user wants "Trend of these items".
-                                     # For now, let's keep intent DIAGNOSTIC (since we have logic) but change viz type.
-                                     # But main.py DIAGNOSTIC block ignores viz type...
-                                     # We need to map DIAGNOSTIC -> line -> handle it in frontend or main?
-                                     pass
-                             elif "bar" in user_query.lower():
-                                 params["visualization_type"] = "bar"
-                             elif "pie" in user_query.lower():
-                                 params["visualization_type"] = "pie"
-                             elif "scatter" in user_query.lower():
-                                 params["visualization_type"] = "scatter"
-                             
-                             print(f"Context Recovered. New Intent: {params['intent']}")
+            # If the user asks for a visualization but we couldn't detect grouping/metrics,
+            # recover context from the previous query.
+            has_viz_request = params.get("visualization_type") is not None
+            needs_context = (not params.get("group_by")) and (params.get("intent") in ["LIST", "UNKNOWN", "AGGREGATE"])
+            
+            print(f"DEBUG CONTEXT: has_viz_request={has_viz_request}, needs_context={needs_context}, history_len={len(request.history) if request.history else 0}")
+            
+            if has_viz_request and needs_context and request.history:
+                # Find the last USER message that was a DATA query (not a viz-change request)
+                # Skip messages that are purely about changing visualization
+                viz_only_keywords = ["visualize", "piechart", "barchart", "linechart", "show as", "convert to", "change to"]
+                
+                reversed_hist = request.history[::-1]
+                last_data_msg = None
+                for m in reversed_hist:
+                    if m.get('role') != 'user':
+                        continue
+                    content = m.get('content', '').lower()
+                    # Skip current query
+                    if content.strip() == user_query.lower().strip():
+                        continue
+                    # Skip pure viz-change requests (short queries with only viz keywords)
+                    is_viz_only = len(content.split()) <= 5 and any(k in content for k in viz_only_keywords)
+                    if not is_viz_only:
+                        last_data_msg = m
+                        break
+                
+                if last_data_msg:
+                    print(f"Recovering context from previous data query: {last_data_msg['content']}")
+                    prev_params = extractor.extract_parameters(last_data_msg['content'])
+                    
+                    # Keep the viz type from current request, but use data context from previous
+                    current_viz = params["visualization_type"]
+                    params["intent"] = prev_params["intent"]
+                    params["filters"] = prev_params["filters"]
+                    params["metrics"] = prev_params["metrics"]
+                    params["group_by"] = prev_params["group_by"]
+                    params["limit"] = prev_params.get("limit")  # Also keep limit!
+                    params["visualization_type"] = current_viz
+                    
+                    print(f"Context Recovered. Intent={params['intent']}, GroupBy={params['group_by']}, Limit={params.get('limit')}, Viz={params['visualization_type']}")
 
             intent = params["intent"]
             filters = params["filters"]
@@ -150,7 +156,7 @@ async def process_query(request: QueryRequest):
                     if params["filters"].get("analysis_mode") == "decline":
                          # Decline Analysis
                          from .analytics import perform_decline_analysis
-                         decline_result = perform_decline_analysis()
+                         decline_result = await perform_decline_analysis()
                          
                          if "error" in decline_result:
                              context_data += f"ANALYSIS ERROR: {decline_result['error']}\n"
@@ -170,7 +176,7 @@ async def process_query(request: QueryRequest):
 
                     else:
                         # Standard RCA
-                        rca_result = perform_root_cause_analysis(params["filters"], metric)
+                        rca_result = await perform_root_cause_analysis(params["filters"], metric)
                         
                         if "error" in rca_result:
                              context_data += f"DIAGNOSTIC ERROR: {rca_result['error']}\n"
@@ -180,7 +186,7 @@ async def process_query(request: QueryRequest):
                              chart_metadata = {"type": "rca", "data": rca_result.get('factors', [])}
 
                 else:
-                    db_results = database.query_dynamic(params)
+                    db_results = await database.query_dynamic(params)
                     
                     if isinstance(db_results, dict) and "error" in db_results:
                         yield json.dumps({"type": "error", "content": db_results['error']}) + "\n"
@@ -208,8 +214,27 @@ async def process_query(request: QueryRequest):
                     # The Prompt Template will handle labeling if needed.
                     context_data += f"{structured_summary}\n\n"
                     
-                    chart_type = params.get("visualization_type") or intent.lower()
-                    chart_metadata = {"type": chart_type, "data": db_results}
+                    # Chart Generation Logic
+                    # Only show chart if:
+                    # 1. User explicitly asked for it (visualization_type is set)
+                    # 2. It's a TREND (inherently visual)
+                    # 3. There is a grouping dimension (e.g., Sales by Region)
+                    # Chart Generation Logic
+                    explicit_viz = params.get("visualization_type")
+                    grouping_present = bool(params.get("group_by"))
+                    is_trend = (intent == "TREND")
+                    
+                    print(f"DEBUG CHART LOGIC: explicit_viz={explicit_viz}, is_trend={is_trend}, grouping_present={grouping_present} (raw: {params.get('group_by')})")
+                    
+                    if explicit_viz or is_trend or grouping_present:
+                        # Safe fallback: if explicit_viz is None, use intent.lower()
+                        chart_type = explicit_viz.lower() if explicit_viz else intent.lower()
+                        chart_metadata = {"type": chart_type, "data": db_results}
+                        print(f"DEBUG CHART_METADATA: type={chart_type}, rows={len(db_results)}")
+                    else:
+                        # Suppress chart for simple scalar aggregates (e.g. "Total Sales")
+                        chart_metadata = None
+                        print("DEBUG CHART: Suppressed (No grouping/explicit request)")
 
                     # SAFETY CHECK: Raw Transaction Data
                     # If we accidentally got raw rows (order_id) and user didn't explicitly ask for a list/table,

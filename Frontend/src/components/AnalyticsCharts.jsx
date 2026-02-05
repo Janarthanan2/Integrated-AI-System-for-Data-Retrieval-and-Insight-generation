@@ -7,8 +7,9 @@ import { styled } from '@mui/material/styles';
 import { TrendingDown, AlertTriangle, ArrowDownRight, Trophy, Map } from 'lucide-react';
 import Chart from 'react-apexcharts';
 
-// Modern Light Theme Palette (Rose)
-const COLORS = ['#F43F5E', '#E11D48', '#BE123C', '#9F1239', '#881337'];
+// Theme Palettes
+const ROSE_PALETTE = ['#F43F5E', '#E11D48', '#BE123C', '#9F1239', '#881337'];
+const CYAN_PALETTE = ['#22D3EE', '#3B82F6', '#67E8F9', '#06B6D4', '#0EA5E9'];
 
 const getMetricKey = (data) => {
     if (!data || data.length === 0) return 'total_sales';
@@ -30,29 +31,36 @@ const getLabelKey = (data) => {
     return found || 'month';
 };
 
-const getCommonOptions = (theme = 'light') => ({
-    chart: {
-        background: 'transparent',
-        toolbar: { show: false },
-        animations: { enabled: true },
-        fontFamily: 'Inter, sans-serif'
-    },
-    theme: { mode: 'light' },
-    dataLabels: { enabled: false },
-    grid: { show: false, borderColor: '#E5E7EB' }, // Gray-200
-    xaxis: {
-        labels: { style: { colors: '#374151' } }, // Gray-700
-        axisBorder: { show: false },
-        axisTicks: { show: false }
-    },
-    yaxis: {
-        labels: { style: { colors: '#374151' } }
-    },
-    legend: { labels: { colors: '#374151' } },
-    tooltip: { theme: 'light' }
-});
+const getCommonOptions = (theme = 'light') => {
+    const isDark = theme === 'dark';
+    return {
+        chart: {
+            background: 'transparent',
+            toolbar: { show: false },
+            animations: { enabled: true },
+            fontFamily: 'Inter, sans-serif'
+        },
+        theme: { mode: isDark ? 'dark' : 'light' },
+        dataLabels: { enabled: false },
+        grid: { show: false, borderColor: isDark ? '#374151' : '#E5E7EB' },
+        xaxis: {
+            labels: { style: { colors: isDark ? '#9CA3AF' : '#374151' } },
+            axisBorder: { show: false },
+            axisTicks: { show: false }
+        },
+        yaxis: {
+            labels: { style: { colors: isDark ? '#9CA3AF' : '#374151' } }
+        },
+        legend: { labels: { colors: isDark ? '#E5E7EB' : '#374151' } },
+        tooltip: { theme: isDark ? 'dark' : 'light' }
+    };
+};
 
-const getBoxPlotConfig = (data, metricKey, labelKey) => {
+const getBoxPlotConfig = (data, metricKey, labelKey, theme) => {
+    const isDark = theme === 'dark';
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
+    const secondaryColor = isDark ? '#3B82F6' : '#BE123C';
+
     const series = [{
         type: 'boxPlot',
         data: data.map(d => ({
@@ -64,14 +72,14 @@ const getBoxPlotConfig = (data, metricKey, labelKey) => {
     return {
         series,
         options: {
-            ...getCommonOptions(),
+            ...getCommonOptions(theme),
             chart: { type: 'boxPlot', height: 350 },
-            title: { text: `Distribution of ${metricKey}`, align: 'left', style: { color: '#F43F5E' } },
+            title: { text: `Distribution of ${metricKey}`, align: 'left', style: { color: mainColor } },
             plotOptions: {
                 boxPlot: {
                     colors: {
-                        upper: '#F43F5E',
-                        lower: '#BE123C'
+                        upper: mainColor,
+                        lower: secondaryColor
                     }
                 }
             }
@@ -79,7 +87,10 @@ const getBoxPlotConfig = (data, metricKey, labelKey) => {
     };
 };
 
-const getHeatmapConfig = (data, metricKey, labelKey) => {
+const getHeatmapConfig = (data, metricKey, labelKey, theme) => {
+    const isDark = theme === 'dark';
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
+
     const series = [{
         name: metricKey,
         data: data.map(d => ({
@@ -91,7 +102,7 @@ const getHeatmapConfig = (data, metricKey, labelKey) => {
     return {
         series,
         options: {
-            ...getCommonOptions(),
+            ...getCommonOptions(theme),
             chart: { type: 'heatmap', height: 350 },
             plotOptions: {
                 heatmap: {
@@ -103,33 +114,42 @@ const getHeatmapConfig = (data, metricKey, labelKey) => {
                             from: 0,
                             to: 1000000000,
                             name: 'scale',
-                            color: '#F43F5E'
+                            color: mainColor
                         }]
                     }
                 }
             },
             dataLabels: { enabled: false },
-            stroke: { width: 1, colors: ['#fff'] }
+            stroke: { width: 1, colors: [isDark ? '#0B1220' : '#fff'] }
         }
     };
 }
 
-const getTreemapConfig = (data, metricKey, labelKey) => ({
-    series: [{
-        data: data.map(d => ({
-            x: d[labelKey],
-            y: d[metricKey]
-        }))
-    }],
-    options: {
-        ...getCommonOptions(),
-        chart: { type: 'treemap', height: 350 },
-        colors: ['#F43F5E', '#FB7185', '#FDA4AF', '#BE123C'],
-        title: { text: `Composition by ${labelKey}`, style: { color: '#F43F5E' } }
-    }
-});
+const getTreemapConfig = (data, metricKey, labelKey, theme) => {
+    const isDark = theme === 'dark';
+    const palette = isDark ? CYAN_PALETTE : ROSE_PALETTE;
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
 
-const getBubbleConfig = (data, metricKey, labelKey) => {
+    return {
+        series: [{
+            data: data.map(d => ({
+                x: d[labelKey],
+                y: d[metricKey]
+            }))
+        }],
+        options: {
+            ...getCommonOptions(theme),
+            chart: { type: 'treemap', height: 350 },
+            colors: palette,
+            title: { text: `Composition by ${labelKey}`, style: { color: mainColor } }
+        }
+    };
+};
+
+const getBubbleConfig = (data, metricKey, labelKey, theme) => {
+    const isDark = theme === 'dark';
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
+
     const series = [{
         name: metricKey,
         data: data.map((d, i) => ([
@@ -142,44 +162,53 @@ const getBubbleConfig = (data, metricKey, labelKey) => {
     return {
         series,
         options: {
-            ...getCommonOptions(),
+            ...getCommonOptions(theme),
             chart: { type: 'bubble', height: 350 },
-            xaxis: { type: 'numeric', labels: { style: { colors: '#374151' } } },
+            xaxis: { type: 'numeric', labels: { style: { colors: isDark ? '#9CA3AF' : '#374151' } } },
             fill: { opacity: 0.8 },
-            colors: ['#F43F5E']
+            colors: [mainColor]
         }
     };
 }
 
-const getAreaChartConfig = (data, metricKey, labelKey) => ({
-    series: [{
-        name: metricKey,
-        data: data.map(d => d[metricKey])
-    }],
-    options: {
-        ...getCommonOptions(),
-        chart: { type: 'area', height: 350 },
-        stroke: { curve: 'smooth', colors: ['#F43F5E'] },
-        xaxis: { categories: data.map(d => d[labelKey]), labels: { style: { colors: '#374151' } } },
-        fill: {
-            type: 'gradient',
-            gradient: {
-                shadeIntensity: 1,
-                opacityFrom: 0.7,
-                opacityTo: 0.3,
-                stops: [0, 90, 100],
-                colorStops: [
-                    { offset: 0, color: "#F43F5E", opacity: 0.8 },
-                    { offset: 100, color: "#BE123C", opacity: 0.2 }
-                ]
-            }
-        },
-        dataLabels: { enabled: false }
-    }
-});
+const getAreaChartConfig = (data, metricKey, labelKey, theme) => {
+    const isDark = theme === 'dark';
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
+    const endColor = isDark ? '#3B82F6' : '#BE123C';
+
+    return {
+        series: [{
+            name: metricKey,
+            data: data.map(d => d[metricKey])
+        }],
+        options: {
+            ...getCommonOptions(theme),
+            chart: { type: 'area', height: 350 },
+            stroke: { curve: 'smooth', colors: [mainColor] },
+            xaxis: {
+                categories: data.map(d => d[labelKey]),
+                labels: { style: { colors: isDark ? '#9CA3AF' : '#374151' } }
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.7,
+                    opacityTo: 0.3,
+                    stops: [0, 90, 100],
+                    colorStops: [
+                        { offset: 0, color: mainColor, opacity: 0.8 },
+                        { offset: 100, color: endColor, opacity: 0.2 }
+                    ]
+                }
+            },
+            dataLabels: { enabled: false }
+        }
+    };
+};
 
 
-export function AnalysisSection({ type, title, data, loading }) {
+export function AnalysisSection({ type, title, data, loading, theme = 'light' }) {
     if (loading) return <div className="animate-pulse h-64 bg-gray-100 rounded-xl" />
 
     // Safety check for error object or invalid data
@@ -199,6 +228,7 @@ export function AnalysisSection({ type, title, data, loading }) {
     }
     if (!Array.isArray(data) || data.length === 0) return null;
 
+    const isDark = theme === 'dark';
     const metricKey = getMetricKey(data)
     const labelKey = getLabelKey(data)
 
@@ -221,24 +251,33 @@ export function AnalysisSection({ type, title, data, loading }) {
         slotProps: { legend: { hidden: true } }
     }
 
+    // Colors based on theme
+    const mainColor = isDark ? '#22D3EE' : '#F43F5E';
+    const secondaryColor = isDark ? '#67E8F9' : '#FB7185';
+    const axisColor = isDark ? '#9CA3AF' : '#374151';
+    const gridColor = isDark ? '#374151' : '#E5E7EB';
+    const textColor = isDark ? '#E5E7EB' : '#374151';
+    const PALETTE = isDark ? CYAN_PALETTE : ROSE_PALETTE;
+
     // --- Chart Selection Logic ---
     let ChartComponent = null;
 
     // Advanced Charts (ApexCharts)
     if (['box_plot', 'box', 'violin'].includes(type)) {
-        const config = getBoxPlotConfig(normalizedData, metricKey, labelKey);
+        const config = getBoxPlotConfig(normalizedData, metricKey, labelKey, theme);
         ChartComponent = <Chart options={config.options} series={config.series} type="boxPlot" height={350} />;
     } else if (['heatmap'].includes(type)) {
-        const config = getHeatmapConfig(normalizedData, metricKey, labelKey);
+        console.log("Rendering HEATMAP with theme:", theme); // Debugging
+        const config = getHeatmapConfig(normalizedData, metricKey, labelKey, theme);
         ChartComponent = <Chart options={config.options} series={config.series} type="heatmap" height={350} />;
     } else if (['treemap'].includes(type)) {
-        const config = getTreemapConfig(normalizedData, metricKey, labelKey);
+        const config = getTreemapConfig(normalizedData, metricKey, labelKey, theme);
         ChartComponent = <Chart options={config.options} series={config.series} type="treemap" height={350} />;
     } else if (['bubble'].includes(type)) {
-        const config = getBubbleConfig(normalizedData, metricKey, labelKey);
+        const config = getBubbleConfig(normalizedData, metricKey, labelKey, theme);
         ChartComponent = <Chart options={config.options} series={config.series} type="bubble" height={350} />;
-    } else if (['area'].includes(type)) { // Explicit area chart request
-        const config = getAreaChartConfig(normalizedData, metricKey, labelKey);
+    } else if (['area'].includes(type)) {
+        const config = getAreaChartConfig(normalizedData, metricKey, labelKey, theme);
         ChartComponent = <Chart options={config.options} series={config.series} type="area" height={350} />;
     }
 
@@ -246,11 +285,11 @@ export function AnalysisSection({ type, title, data, loading }) {
     else if (type === 'aggregate' && normalizedData.length === 1) {
         ChartComponent = (
             <div className="flex flex-col items-center justify-center h-[300px] text-center">
-                <span className="text-gray-500 text-lg mb-2 capitalize">{metricKey.replace(/_/g, ' ')}</span>
-                <span className="text-6xl font-bold text-gray-900 tracking-tight">
+                <span className={`text-lg mb-2 capitalize ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{metricKey.replace(/_/g, ' ')}</span>
+                <span className={`text-6xl font-bold tracking-tight ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
                     {normalizedData[0][metricKey]?.toLocaleString('en-US', { style: 'decimal', maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-rose-500 text-sm mt-3 font-medium bg-rose-50 px-3 py-1 rounded-full">
+                <span className={`text-sm mt-3 font-medium px-3 py-1 rounded-full ${isDark ? 'text-cyan-400 bg-cyan-900/30' : 'text-rose-500 bg-rose-50'}`}>
                     Aggregate Value
                 </span>
             </div>
@@ -263,26 +302,26 @@ export function AnalysisSection({ type, title, data, loading }) {
                 xAxis={[{
                     scaleType: 'point',
                     dataKey: labelKey,
-                    tickLabelStyle: { fill: '#374151', fontSize: 12 },
-                    labelStyle: { fill: '#374151' }
+                    tickLabelStyle: { fill: axisColor, fontSize: 12 },
+                    labelStyle: { fill: axisColor }
                 }]}
                 yAxis={[{
-                    labelStyle: { fill: '#374151' },
-                    tickLabelStyle: { fill: '#374151', fontSize: 12 }
+                    labelStyle: { fill: axisColor },
+                    tickLabelStyle: { fill: axisColor, fontSize: 12 }
                 }]}
                 series={[
                     {
                         dataKey: metricKey,
-                        area: !isScatter, // Area for line/trend, not for scatter
-                        color: isScatter ? '#FB7185' : '#F43F5E', // Rose
+                        area: !isScatter,
+                        color: isScatter ? secondaryColor : mainColor,
                         showMark: isScatter,
                         showLine: !isScatter,
                     }
                 ]}
                 grid={{ vertical: isScatter, horizontal: true }}
                 sx={{
-                    '.MuiChartsAxis-line': { stroke: '#E5E7EB' },
-                    '.MuiChartsAxis-tick': { stroke: '#E5E7EB' },
+                    '.MuiChartsAxis-line': { stroke: gridColor },
+                    '.MuiChartsAxis-tick': { stroke: gridColor },
                 }}
             />
         );
@@ -296,7 +335,7 @@ export function AnalysisSection({ type, title, data, loading }) {
                             id: i,
                             value: Math.abs(d[metricKey]),
                             label: d[labelKey],
-                            color: COLORS[i % COLORS.length]
+                            color: PALETTE[i % PALETTE.length]
                         })),
                         innerRadius: isDonut ? 70 : 30,
                         outerRadius: 100,
@@ -314,11 +353,11 @@ export function AnalysisSection({ type, title, data, loading }) {
                     }
                 }}
                 sx={{
-                    '.MuiChartsLegend-series text': { fill: '#374151 !important' },
-                    '.MuiChartsLegend-root text': { fill: '#374151 !important' },
-                    '.MuiChartsLegend-label': { fill: '#374151 !important' },
-                    '.MuiChartsLabel-root': { fill: '#374151 !important' },
-                    '.MuiChartsLegend-root': { fill: '#374151 !important', color: '#374151 !important' },
+                    '.MuiChartsLegend-series text': { fill: `${textColor} !important` },
+                    '.MuiChartsLegend-root text': { fill: `${textColor} !important` },
+                    '.MuiChartsLegend-label': { fill: `${textColor} !important` },
+                    '.MuiChartsLabel-root': { fill: `${textColor} !important` },
+                    '.MuiChartsLegend-root': { fill: `${textColor} !important`, color: `${textColor} !important` },
                 }}
             />
         );
@@ -329,22 +368,22 @@ export function AnalysisSection({ type, title, data, loading }) {
                 {...commonProps}
                 layout={isHorizontal ? 'horizontal' : 'vertical'}
                 xAxis={isHorizontal ?
-                    [{ tickLabelStyle: { fill: '#374151', fontSize: 12 } }] :
-                    [{ scaleType: 'band', dataKey: labelKey, tickLabelStyle: { fill: '#374151', fontSize: 12 } }]
+                    [{ tickLabelStyle: { fill: axisColor, fontSize: 12 } }] :
+                    [{ scaleType: 'band', dataKey: labelKey, tickLabelStyle: { fill: axisColor, fontSize: 12 } }]
                 }
                 yAxis={isHorizontal ?
                     [{
                         scaleType: 'band',
                         dataKey: labelKey,
-                        tickLabelStyle: { fill: '#374151', fontSize: 12 },
+                        tickLabelStyle: { fill: axisColor, fontSize: 12 },
                         valueFormatter: (value) => value
                     }] :
-                    [{ tickLabelStyle: { fill: '#374151', fontSize: 12 } }]
+                    [{ tickLabelStyle: { fill: axisColor, fontSize: 12 } }]
                 }
-                series={[{ dataKey: metricKey, color: '#F43F5E' }]}
+                series={[{ dataKey: metricKey, color: mainColor }]}
                 sx={{
-                    '.MuiChartsAxis-line': { stroke: '#E5E7EB' },
-                    '.MuiChartsAxis-tick': { stroke: '#E5E7EB' },
+                    '.MuiChartsAxis-line': { stroke: gridColor },
+                    '.MuiChartsAxis-tick': { stroke: gridColor },
                 }}
             />
         );
@@ -352,8 +391,8 @@ export function AnalysisSection({ type, title, data, loading }) {
 
     return (
         <div style={{ width: '100%' }}>
-            <h3 className="text-gray-800 font-semibold mb-4 text-sm uppercase tracking-wider flex items-center gap-2 font-outfit">
-                <span className="w-2 h-2 bg-rose-500 rounded-full shadow-sm"></span>
+            <h3 className={`font-semibold mb-4 text-sm uppercase tracking-wider flex items-center gap-2 font-outfit ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
+                <span className={`w-2 h-2 rounded-full shadow-sm ${isDark ? 'bg-cyan-400' : 'bg-rose-500'}`}></span>
                 <span className="tracking-widest">{title || "Data Analysis"}</span>
             </h3>
 

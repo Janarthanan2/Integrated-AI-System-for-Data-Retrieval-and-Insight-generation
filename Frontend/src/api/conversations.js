@@ -88,5 +88,16 @@ export const getArtifacts = async (conversationId) => {
     return apiRequest(`/api/conversations/${conversationId}/artifacts`);
 };
 
+/**
+ * Create an artifact
+ * @param {Object} data - { message_id, conversation_id, type, chart_type?, spec?, data_snapshot? }
+ */
+export const createArtifact = async (data) => {
+    return apiRequest('/api/conversations/artifacts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+};
+
 // Import for deleteConversation
 import { API_URL, authHeaders } from './config';

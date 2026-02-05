@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 import AnalyticsCharts from './AnalyticsCharts';
 import { BarChart2, TrendingDown, Trophy } from 'lucide-react';
 
-const ChatHistory = ({ history, isLoading, onQuickAction }) => {
+const ChatHistory = ({ history, isLoading, onQuickAction, theme }) => {
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -14,9 +14,72 @@ const ChatHistory = ({ history, isLoading, onQuickAction }) => {
 
     const formatMessage = (text) => {
         if (!text) return "";
-        let html = text
+
+        let html = text;
+
+        // Convert markdown tables to HTML tables
+        // Detect table pattern: lines starting with |
+        const lines = html.split('\n');
+        let inTable = false;
+        let tableRows = [];
+        let result = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+
+            if (line.startsWith('|') && line.endsWith('|')) {
+                // Skip separator rows (--- | ---)
+                if (line.match(/^\|[\s\-|]+\|$/)) {
+                    continue;
+                }
+
+                if (!inTable) {
+                    inTable = true;
+                    tableRows = [];
+                }
+
+                // Parse cells
+                const cells = line.split('|').filter(c => c.trim() !== '');
+                tableRows.push(cells.map(c => c.trim()));
+            } else {
+                // End of table
+                if (inTable && tableRows.length > 0) {
+                    let tableHtml = '<table class="md-table"><thead><tr>';
+                    // First row is header
+                    tableHtml += tableRows[0].map(c => `<th>${c}</th>`).join('');
+                    tableHtml += '</tr></thead><tbody>';
+                    // Rest are body rows
+                    for (let j = 1; j < tableRows.length; j++) {
+                        tableHtml += '<tr>' + tableRows[j].map(c => `<td>${c}</td>`).join('') + '</tr>';
+                    }
+                    tableHtml += '</tbody></table>';
+                    result.push(tableHtml);
+                    tableRows = [];
+                    inTable = false;
+                }
+                result.push(line);
+            }
+        }
+
+        // Handle table at end of text
+        if (inTable && tableRows.length > 0) {
+            let tableHtml = '<table class="md-table"><thead><tr>';
+            tableHtml += tableRows[0].map(c => `<th>${c}</th>`).join('');
+            tableHtml += '</tr></thead><tbody>';
+            for (let j = 1; j < tableRows.length; j++) {
+                tableHtml += '<tr>' + tableRows[j].map(c => `<td>${c}</td>`).join('') + '</tr>';
+            }
+            tableHtml += '</tbody></table>';
+            result.push(tableHtml);
+        }
+
+        html = result.join('<br/>');
+
+        // Apply other markdown formatting
+        html = html
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/`(.*?)`/g, '<code class="px-1 rounded">$1</code>');
+
         return html;
     };
 
@@ -105,7 +168,7 @@ const ChatHistory = ({ history, isLoading, onQuickAction }) => {
                                 }} />
                                 {msg.chart && msg.chart.data && (
                                     <div className="mt-4 rounded-xl overflow-hidden border border-gray-200 bg-white p-1 shadow-sm">
-                                        <AnalyticsCharts data={msg.chart.data} type={msg.chart.type} />
+                                        <AnalyticsCharts data={msg.chart.data} type={msg.chart.type} theme={theme} />
                                     </div>
                                 )}
                             </div>
