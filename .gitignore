@@ -1,27 +1,57 @@
-# Dependencies
-node_modules/
-
-# Python
+# ──── Python ────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+.venv/
 venv/
 env/
+*.egg-info/
+dist/
+build/
+
+# ──── Environment Variables ─────────────────────────
 .env
 
-# IDE
+# ──── Data & Cache Files ───────────────────────────
+*.pkl
+*.db
+*.sqlite3
+*.xlsx
+*.csv
+
+# ──── Node / Frontend ──────────────────────────────
+node_modules/
+Frontend/dist/
+
+# ──── Android / Gradle ─────────────────────────────
+AndroidApp/.gradle/
+AndroidApp/.idea/
+AndroidApp/build/
+AndroidApp/app/build/
+AndroidApp/local.properties
+AndroidApp/build_log.txt
+AndroidApp/tunnels.json
+*.apk
+*.aab
+*.hprof
+
+# ──── IDE ───────────────────────────────────────────
 .vscode/
 .idea/
+*.iml
 
-# OS
+# ──── OS Files ──────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+*.swp
+*~
 
-# Logs
+# ──── Logs ──────────────────────────────────────────
 *.log
 
-# AI Agent
+# ──── AI Agent ──────────────────────────────────────
 .agent/
 .gemini/
