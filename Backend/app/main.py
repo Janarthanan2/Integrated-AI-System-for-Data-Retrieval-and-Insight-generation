@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .security import SecurityManager
@@ -8,14 +9,26 @@ from .generation import GenerationManager
 from .models import QueryRequest, QueryResponse
 import uvicorn
 import os
-from fastapi.responses import StreamingResponse
 import json
 import asyncio
 import numpy as np
+import logging
+from typing import Optional
+
+# Suppress TQDM checks
+os.environ["TQDM_DISABLE"] = "1"
+
+# Configure Logging
+logging.basicConfig(level=logging.INFO)
+# Suppress noisy libraries
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 # Import conversation history components
 from .routers import auth_router, conversations_router
 from .db_models.base import init_db, close_db
+from .activity_logger import get_logger
 
 
 # Lifespan event handler for startup/shutdown
@@ -46,8 +59,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -72,7 +84,7 @@ import time
 # ... (Imports)
 
 @app.post("/query") # Removed response_model since it's a stream
-async def process_query(request: QueryRequest):
+async def process_query(request: QueryRequest, raw_request: Request):
     async def event_generator():
         start_time = time.time()
         user_query = request.query
@@ -80,22 +92,31 @@ async def process_query(request: QueryRequest):
         # Initialize variables to avoid UnboundLocalError
         intent = "UNKNOWN"
         context_data = ""
-        print(f"DEBUG: Processing query: {user_query}")
+
+        # Extract user_id from optional auth header for activity logging
+        _log_user_id = None
+        try:
+            auth_header = raw_request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                from .services.auth_service import AuthService
+                _log_user_id = AuthService.decode_token(auth_header.split(" ")[1])
+        except Exception:
+            pass
+
         
 
         
         try:
             # 1. Intent & Parameter Extraction
             params = extractor.extract_parameters(user_query)
-            print(f"DEBUG EXTRACTION: Intent={params.get('intent')} Filters={params.get('filters')} GroupBy={params.get('group_by')} Metrics={params.get('metrics')} Viz={params.get('visualization_type')}")
+
             
             # Context Recovery Logic (Follow-up handling)
             # If the user asks for a visualization but we couldn't detect grouping/metrics,
             # recover context from the previous query.
             has_viz_request = params.get("visualization_type") is not None
             needs_context = (not params.get("group_by")) and (params.get("intent") in ["LIST", "UNKNOWN", "AGGREGATE"])
-            
-            print(f"DEBUG CONTEXT: has_viz_request={has_viz_request}, needs_context={needs_context}, history_len={len(request.history) if request.history else 0}")
+
             
             if has_viz_request and needs_context and request.history:
                 # Find the last USER message that was a DATA query (not a viz-change request)
@@ -129,10 +150,17 @@ async def process_query(request: QueryRequest):
                     params["group_by"] = prev_params["group_by"]
                     params["limit"] = prev_params.get("limit")  # Also keep limit!
                     params["visualization_type"] = current_viz
-                    
-                    print(f"Context Recovered. Intent={params['intent']}, GroupBy={params['group_by']}, Limit={params.get('limit')}, Viz={params['visualization_type']}")
+
 
             intent = params["intent"]
+
+            # Log query activity
+            if _log_user_id:
+                try:
+                    get_logger().log_query(_log_user_id, intent)
+                except Exception:
+                    pass
+
             filters = params["filters"]
             scope = filters.get("region", "Global")
             if "category" in filters: scope += f" / {filters['category']}"
@@ -216,7 +244,8 @@ async def process_query(request: QueryRequest):
                             if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
                                 r[k] = None
 
-                    print(f"DEBUG: Data retrieved. Rows={len(db_results)} Keys={list(db_results[0].keys())}")
+
+
                     
                     # Summarize
                     if intent == "TREND":
@@ -237,18 +266,17 @@ async def process_query(request: QueryRequest):
                     explicit_viz = params.get("visualization_type")
                     grouping_present = bool(params.get("group_by"))
                     is_trend = (intent == "TREND")
-                    
-                    print(f"DEBUG CHART LOGIC: explicit_viz={explicit_viz}, is_trend={is_trend}, grouping_present={grouping_present} (raw: {params.get('group_by')})")
+
                     
                     if explicit_viz or is_trend or grouping_present:
                         # Safe fallback: if explicit_viz is None, use intent.lower()
                         chart_type = explicit_viz.lower() if explicit_viz else intent.lower()
                         chart_metadata = {"type": chart_type, "data": db_results}
-                        print(f"DEBUG CHART_METADATA: type={chart_type}, rows={len(db_results)}")
+
                     else:
                         # Suppress chart for simple scalar aggregates (e.g. "Total Sales")
                         chart_metadata = None
-                        print("DEBUG CHART: Suppressed (No grouping/explicit request)")
+
 
                     # SAFETY CHECK: Raw Transaction Data
                     # If we accidentally got raw rows (order_id) and user didn't explicitly ask for a list/table,
@@ -323,13 +351,68 @@ async def process_query(request: QueryRequest):
             print(f"Error: {e}")
             yield json.dumps({"type": "error", "content": f"Internal Error: {str(e)}"}) + "\n"
         finally:
-            print(f"Request processing finished (Title: {intent}). Duration: {time.time() - start_time:.2f}s")
+            pass
+
             
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
+@app.get("/models")
+def get_models():
+    """Returns available models and the currently active model."""
+    return {
+        "models": generation.get_available_models(),
+        "current": generation.get_current_model()
+    }
+
+@app.post("/models/switch")
+def switch_model(request: dict):
+    """Switches the active model. Body: {"model_id": "tinyllama" | "mistral"}"""
+    model_id = request.get("model_id")
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id is required")
+
+    success = generation.load_model(model_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to load model '{model_id}'")
+
+    return {
+        "status": "success",
+        "current": generation.get_current_model()
+    }
+
 @app.get("/health")
 def health_check():
-    return {"status": "active", "modules": ["database", "retrieval", "generation", "security", "analytics"]}
+    return {"status": "active", "modules": ["database", "retrieval", "generation", "security", "analytics", "activity_logger"]}
+
+# ─── Admin / Logging Endpoints ──────────────────────────────
+
+@app.get("/admin/logs")
+def get_activity_logs():
+    """View all user activity logs as JSON."""
+    logger = get_logger()
+    return {"logs": logger.get_all_logs()}
+
+@app.get("/admin/logs/download")
+def download_activity_logs():
+    """Download the user_activity_logs.xlsx file."""
+    logger = get_logger()
+    file_path = logger.get_file_path()
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Log file not found")
+    return FileResponse(
+        path=file_path,
+        filename="user_activity_logs.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+@app.post("/admin/logs/backup")
+def backup_activity_logs():
+    """Create a timestamped backup of the log file."""
+    logger = get_logger()
+    backup_path = logger.backup()
+    if not backup_path:
+        raise HTTPException(status_code=500, detail="Backup failed")
+    return {"status": "success", "backup_path": backup_path}
 
 from .analytics import router as analytics_router, perform_root_cause_analysis
 app.include_router(analytics_router)

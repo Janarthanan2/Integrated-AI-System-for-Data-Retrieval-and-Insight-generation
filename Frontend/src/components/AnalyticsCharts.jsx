@@ -244,9 +244,10 @@ export function AnalysisSection({ type, title, data, loading, theme = 'light' })
     const isHorizontal = type === 'region' || type === 'rca' || type === 'decline' || type === 'bar';
     const chartHeight = isHorizontal ? Math.max(400, normalizedData.length * 50) : 400;
 
+    const isMobile = window.innerWidth < 768;
     const commonProps = {
         dataset: normalizedData,
-        margin: { top: 20, bottom: 40, left: 100, right: 20 },
+        margin: { top: 20, bottom: 40, left: isMobile ? 120 : 100, right: 20 }, // Increased left margin for mobile labels
         height: chartHeight,
         slotProps: { legend: { hidden: true } }
     }

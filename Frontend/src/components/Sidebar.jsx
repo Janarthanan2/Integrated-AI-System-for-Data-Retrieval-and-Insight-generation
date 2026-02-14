@@ -112,10 +112,10 @@ const Sidebar = ({ isOpen, onClose, theme = 'light' }) => {
             }}
         >
             {/* Header */}
-            <div className="p-3 border-bottom" style={{ borderColor: themeStyles.borderColor }}>
+            <div className="p-3 border-bottom d-flex gap-2" style={{ borderColor: themeStyles.borderColor }}>
                 <button
                     onClick={startNewChat}
-                    className="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2"
+                    className="btn flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2"
                     style={{
                         background: themeStyles.gradient,
                         border: 'none',
@@ -126,6 +126,19 @@ const Sidebar = ({ isOpen, onClose, theme = 'light' }) => {
                 >
                     <Plus size={18} />
                     New Chat
+                </button>
+
+                {/* Mobile Close Button */}
+                <button
+                    className="btn d-md-none d-flex align-items-center justify-content-center p-2"
+                    onClick={onClose}
+                    style={{
+                        color: themeStyles.textSecondary,
+                        backgroundColor: themeStyles.inputBg,
+                        borderRadius: '10px'
+                    }}
+                >
+                    <X size={20} />
                 </button>
             </div>
 

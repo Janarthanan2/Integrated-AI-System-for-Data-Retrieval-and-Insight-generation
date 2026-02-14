@@ -250,17 +250,93 @@ code {
     transition: transform 0.3s ease, width 0.3s ease;
 }
 
+/* Responsive Sidebar (Mobile Drawer) */
 @media (max-width: 768px) {
     .sidebar {
         position: fixed;
         left: 0;
         top: 0;
-        z-index: 1000;
+        bottom: 0;
+        z-index: 1050;
+        /* Above everything */
         transform: translateX(-100%);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
     }
 
     .sidebar.sidebar-open {
         transform: translateX(0);
+    }
+
+    /* Mobile Backdrop */
+    .mobile-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+        /* Just below sidebar */
+        backdrop-filter: blur(2px);
+        animation: fadeIn 0.3s ease;
+    }
+
+    /* Hide desktop toggles on mobile if needed */
+    .desktop-toggle {
+        display: none !important;
+    }
+
+    /* Mobile Chat Input Optimizations */
+    .chat-input-container {
+        padding: 0.75rem !important;
+        /* Reduce padding to save space */
+    }
+
+    /* Target only circular action buttons for larger touch area, not popover buttons */
+    .chat-input-container>div>button.rounded-circle,
+    .chat-input-container .d-flex.gap-2 button {
+        width: 44px !important;
+        height: 44px !important;
+    }
+
+    /* Model Selector Popover - Mobile Sizing */
+    .model-selector-popover {
+        width: 220px !important;
+        left: 0 !important;
+    }
+
+    .model-selector-popover button {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 48px;
+    }
+
+    /* Fix Header Alignment */
+    .header-bar {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 

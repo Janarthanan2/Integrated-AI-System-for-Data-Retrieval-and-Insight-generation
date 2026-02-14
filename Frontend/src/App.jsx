@@ -30,7 +30,42 @@ function AppContent() {
     const abortControllerRef = useRef(null);
     const [showSettings, setShowSettings] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+
+    // Model selection state
+    const [selectedModel, setSelectedModel] = useState(null);
+    const [availableModels, setAvailableModels] = useState([]);
+
+    // Fetch available models on mount
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await fetch(`${API_URL}/models`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setAvailableModels(data.models);
+                    setSelectedModel(data.current);
+                }
+            } catch (err) {
+                console.error('Failed to fetch models:', err);
+            }
+        };
+        fetchModels();
+    }, []);
+
+    // Handle Mobile Sidebar auto-close on resize/selection
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth <= 768) {
+                setSidebarOpen(false);
+            } else {
+                setSidebarOpen(true);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
 
     // Theme State
     const [theme, setTheme] = useState(() => {
@@ -326,12 +361,30 @@ function AppContent() {
         <div className="d-flex vh-100 overflow-hidden text-gray-900 bg-white">
 
             {/* Sidebar (Conversation History) - Only show if authenticated */}
-            {isAuthenticated && sidebarOpen && (
-                <Sidebar
-                    isOpen={sidebarOpen}
-                    onClose={() => setSidebarOpen(false)}
-                    theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
-                />
+            {isAuthenticated && (
+                <>
+                    {/* Mobile Backdrop */}
+                    {sidebarOpen && window.innerWidth <= 768 && (
+                        <div
+                            className="mobile-backdrop"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                    )}
+
+                    {/* Always render sidebar but control visibility with classes for animations */}
+                    {/* Note: In previous implementation we unmounted. For smooth slide-in on mobile, we might keep it mounted but translated. */}
+                    {/* However, the CSS `sidebar-open` requires the element to exist. */}
+                    {/* Let's try mounting it conditionally but using the `sidebar-open` class for the transition if mounted. */}
+                    {/* Actually, to support desktop-collapsible and mobile-drawer, strict conditional rendering is tricky for CSS transitions. */}
+                    {/* For now, we will rely on the `sidebarOpen` state. */}
+                    {sidebarOpen && (
+                        <Sidebar
+                            isOpen={sidebarOpen}
+                            onClose={() => setSidebarOpen(false)}
+                            theme={theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme}
+                        />
+                    )}
+                </>
             )}
 
             {/* Main Chat Area */}
@@ -427,6 +480,13 @@ function AppContent() {
                         onSend={() => handleSubmit()}
                         isLoading={isLoading}
                         onNewChat={handleClearHistory}
+                        selectedModel={selectedModel}
+                        onModelChange={(model) => {
+                            setSelectedModel(model);
+                            // Refresh available models list to update is_active flags
+                            fetch(`${API_URL}/models`).then(r => r.json()).then(d => setAvailableModels(d.models)).catch(() => { });
+                        }}
+                        availableModels={availableModels}
                     />
 
                 </Container>

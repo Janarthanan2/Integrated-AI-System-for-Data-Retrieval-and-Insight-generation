@@ -1,7 +1,8 @@
 /**
  * API Configuration
  */
-export const API_URL = "http://127.0.0.1:8000";
+// export const API_URL = "http://127.0.0.1:8000";
+export const API_URL = ""; // Relative path for proxying
 export const AUTH_TOKEN_KEY = "nova_auth_token";
 
 /**

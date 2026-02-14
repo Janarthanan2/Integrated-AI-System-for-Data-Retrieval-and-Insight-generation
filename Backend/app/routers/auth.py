@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db_models.base import get_db
 from ..schemas.auth import UserCreate, UserLogin, Token, UserResponse
 from ..services.auth_service import AuthService
+from ..activity_logger import get_logger
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 security = HTTPBearer()
@@ -36,7 +37,15 @@ async def register(
     
     Returns JWT token on success.
     """
-    return await AuthService.register(db, user_data)
+    result = await AuthService.register(db, user_data)
+
+    # Log the registration as first login
+    try:
+        get_logger().log_login(result.user.id, result.user.username, result.user.email)
+    except Exception as e:
+        print(f"[ActivityLogger] Warning: Could not log registration: {e}")
+
+    return result
 
 
 @router.post("/login", response_model=Token)
@@ -49,7 +58,15 @@ async def login(
     
     Returns JWT token on success.
     """
-    return await AuthService.login(db, login_data)
+    result = await AuthService.login(db, login_data)
+
+    # Log the login event
+    try:
+        get_logger().log_login(result.user.id, result.user.username, result.user.email)
+    except Exception as e:
+        print(f"[ActivityLogger] Warning: Could not log login: {e}")
+
+    return result
 
 
 @router.get("/me", response_model=UserResponse)

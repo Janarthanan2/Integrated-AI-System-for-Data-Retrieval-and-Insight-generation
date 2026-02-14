@@ -11,7 +11,6 @@ def load_embedding_model():
     """Lazy load the model to avoid circular import delays or startup bottlenecks."""
     global MODEL
     if MODEL is None:
-        print("DEBUG: Loading Semantic Model for Fuzzy/Hybrid Matching...")
         try:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             MODEL = SentenceTransformer('all-MiniLM-L6-v2', device=device)
@@ -35,14 +34,12 @@ def set_valid_entities(entities: list):
     # Flatten and Clean
     clean_entities = list(set([str(e) for e in entities if e and len(str(e)) > 2]))
     VALID_ENTITIES = clean_entities
-    print(f"DEBUG: Hybrid Matcher loaded {len(VALID_ENTITIES)} entities.")
     
     # Pre-compute Embeddings
     try:
         load_embedding_model()
         if VALID_ENTITIES:
             ENTITY_EMBEDDINGS = MODEL.encode(VALID_ENTITIES, convert_to_tensor=True)
-            print("DEBUG: Entity embeddings cached.")
     except Exception as e:
         print(f"WARN: Failed to cache entity embeddings: {e}")
 

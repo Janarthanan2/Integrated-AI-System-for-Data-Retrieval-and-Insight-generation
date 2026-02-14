@@ -2,50 +2,68 @@
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![React](https://img.shields.io/badge/Frontend-React-61DAFB)
+![React](https://img.shields.io/badge/Frontend-React%2018-61DAFB)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
+![Android](https://img.shields.io/badge/Mobile-Android%20(Kotlin)-3DDC84)
 
-A powerful **Virtual Data Analyst** that bridges the gap between raw data and decision-making. This system understands user questions in plain English, securely retrieves relevant data from your databases, and uses advanced Large Language Models (LLMs) to generate actionable insights and visualizations.
+A powerful **Virtual Data Analyst** that bridges the gap between raw data and decision-making. Ask questions in plain English, and the system securely retrieves relevant data from your databases, then uses advanced Large Language Models (LLMs) to generate actionable insights and dynamic visualizations — all through a modern chat interface available on **Web** and **Android**.
 
 ---
 
 ## 🚀 Key Features
 
-*   **🗣️ Natural Language Processing**: Ask questions like "What were the top sales last month?" instead of writing SQL.
-*   **📊 Dynamic Visualization**: Automatically generates Line, Bar, Pie, and Scatter charts based on the data context.
-*   **⚡ High-Speed Extraction**: Python-based direct data extraction pipeline for performance and security (No Text-to-SQL hallucination risks).
-*   **🧠 RAG-Powered Insights**: Uses Retrieval-Augmented Generation (RAG) with models like `Mistral-7B` or `TinyLlama` to explain *why* trends are happening.
-*   **🔍 Secure & Robust**: Parameterized queries, role-based access control (RBAC), and user isolation.
-*   **💬 Interactive Chat Interface**: A modern, responsive React-based UI with chat history, streaming responses, and optimistic updates.
+- **🗣️ Natural Language Understanding** — Ask questions like *"What were the top 5 states by sales volume?"* instead of writing SQL.
+- **📊 Dynamic Visualizations** — Automatically generates Line, Bar, Pie, and Scatter charts (via Recharts & ApexCharts) based on data context.
+- **⚡ Direct Data Extraction** — Python-based extraction pipeline with NLP query parsing, fuzzy matching, and entity resolution — no Text-to-SQL hallucination risks.
+- **🧠 RAG-Powered Insights** — Retrieval-Augmented Generation with models like `Mistral-7B` or `TinyLlama` to explain *why* trends are happening.
+- **💬 Interactive Chat Interface** — Streaming responses, chat history persistence, conversation management, and optimistic UI updates.
+- **🔐 Authentication & Security** — JWT-based auth, user isolation, parameterized queries, and role-based access control.
+- **📱 Android App** — Native Kotlin Android client connecting to the same backend.
+- **📝 Activity Logging** — Tracks and exports user activity logs to Excel (`.xlsx`) with backup support.
+- **🔌 MCP Servers** — Model Context Protocol servers for RAG retrieval and SQLite data access.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Backend
-*   **Core**: FastAPI, Python 3.x
-*   **Data Processing**: Pandas, NumPy, SQLAlchemy
-*   **AI/ML**: 
-    *   `sentence-transformers` for embeddings
-    *   `ctransformers` / `bitsandbytes` for quantized LLM inference
-    *   `PyPDF2` for document retrieval
-*   **Database**: MySQL (for business data & chat history)
-*   **Authentication**: JWT (JSON Web Tokens)
+| Layer | Technologies |
+|---|---|
+| **Core** | FastAPI, Python 3.9+, Uvicorn |
+| **Data Processing** | Pandas, NumPy, Scikit-learn |
+| **AI / ML** | `sentence-transformers` (embeddings), `ctransformers` / `bitsandbytes` (quantized LLM inference), `transformers`, PyTorch |
+| **NLP** | Custom `QueryExtractor` with fuzzy matching (`fuzzy_utils`), intent detection, entity resolution |
+| **Database** | MySQL (via PyMySQL & SQLAlchemy), SQLite (conversations), async support via `aiomysql` / `aiosqlite` |
+| **Auth** | JWT (`python-jose`), password hashing (`passlib[bcrypt]`), Pydantic email validation |
+| **Document Retrieval** | `PyPDF2` for PDF parsing, embedding-based semantic search |
+| **Logging** | Custom activity logger with Excel export (`openpyxl`) |
 
-### Frontend
-*   **Framework**: React (Vite)
-*   **Styling**: Material UI (@mui/material), Emotion, Bootstrap 5
-*   **Visualization**: Recharts, ApexCharts
-*   **Icons**: Lucide React, MUI Icons
+### Frontend (Web)
+| Layer | Technologies |
+|---|---|
+| **Framework** | React 18 (Vite) |
+| **UI Library** | Material UI v7 (`@mui/material`), Emotion, Bootstrap 5, React-Bootstrap |
+| **Visualization** | Recharts, ApexCharts, MUI X Charts & Data Grid |
+| **Markdown** | `react-markdown` with `remark-gfm` for rendering AI responses |
+| **Icons** | Lucide React, MUI Icons |
+| **State Management** | React Context (`AuthContext`, `ConversationsContext`) |
+
+### Android App
+| Layer | Technologies |
+|---|---|
+| **Language** | Kotlin |
+| **Build System** | Gradle (Kotlin DSL) |
+| **Networking** | HTTP client connecting to the FastAPI backend |
 
 ---
 
 ## ⚙️ Installation & Setup
 
 ### Prerequisites
-*   Python 3.9 or higher
-*   Node.js & npm
-*   MySQL Server
+- Python 3.9 or higher
+- Node.js & npm
+- MySQL Server
+- Android Studio (for mobile app development, optional)
 
 ### 1. Clone the Repository
 ```bash
@@ -54,57 +72,55 @@ cd "Integrated-AI-System-for-Data-Retrieval-and-Insight-generation"
 ```
 
 ### 2. Backend Setup
-Navigate to the backend directory and set up the Python environment.
-
 ```bash
 cd Backend
 python -m venv .venv
-# Activate Virtual Environment:
+
+# Activate virtual environment
 # Windows:
 .venv\Scripts\activate
-# Mac/Linux:
+# macOS / Linux:
 # source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-**Environment Variables:**
-Create a `.env` file in the `Backend` directory:
+**Environment Variables:** Create a `.env` file in the `Backend/` directory (see `.env.example`):
 ```ini
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=sales_db
+DATABASE_URL=mysql+pymysql://<user>:<password>@localhost:3306/<db_name>
+DEFAULT_DB_LIMIT=50
 SECRET_KEY=your_secret_key
-# Add other model paths or API keys if necessary
 ```
 
 ### 3. Frontend Setup
-Navigate to the frontend directory and install dependencies.
-
 ```bash
 cd ../Frontend
 npm install
 ```
+
+### 4. Android App Setup *(optional)*
+1. Open the `AndroidApp/` directory in **Android Studio**.
+2. Sync Gradle and let dependencies download.
+3. Update the backend URL in the app's network configuration to point to your running server (use your machine's IP or an ngrok tunnel for device testing).
+4. Build & run on an emulator or physical device.
 
 ---
 
 ## ▶️ Running the Application
 
 ### Start the Backend Server
-From the `Backend` directory:
+From the `Backend/` directory:
 ```bash
-# Running with Uvicorn
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
-*Server will start at `http://127.0.0.1:8000`*
+> Server starts at `http://127.0.0.1:8000` — API docs available at `/docs`.
 
 ### Start the Frontend Client
-From the `Frontend` directory:
+From the `Frontend/` directory:
 ```bash
 npm run dev
 ```
-*Client will start at `http://localhost:5173` (or similar)*
+> Client starts at `http://localhost:5173`.
 
 ---
 
@@ -112,29 +128,106 @@ npm run dev
 
 ```
 ├── Backend/
-│   ├── app/                # Main application logic
-│   ├── routers/            # API endpoints (Auth, Chat, etc.)
-│   ├── services/           # Business logic
-│   ├── query_extraction.py # NLP intent extraction
-│   ├── analytics.py        # Data analysis & chart generation
-│   ├── main.py             # App entry point
-│   └── requirements.txt    # Python dependencies
+│   ├── app/
+│   │   ├── main.py                 # FastAPI entry point & query processing
+│   │   ├── query_extraction.py     # NLP intent & entity extraction
+│   │   ├── generation.py           # LLM-powered insight generation (RAG)
+│   │   ├── retrieval.py            # Document retrieval & embedding search
+│   │   ├── analytics.py            # Data analysis & chart generation
+│   │   ├── database.py             # Database connection & data fetching
+│   │   ├── fuzzy_utils.py          # Fuzzy matching utilities
+│   │   ├── security.py             # Security manager (JWT, RBAC)
+│   │   ├── activity_logger.py      # User activity logging to Excel
+│   │   ├── optimization.py         # Query & performance optimization
+│   │   ├── utils.py                # Helper functions (summarize, trends)
+│   │   ├── routers/                # API route handlers
+│   │   │   ├── auth.py             #   └─ Authentication endpoints
+│   │   │   └── conversations.py    #   └─ Chat history CRUD endpoints
+│   │   ├── services/               # Business logic layer
+│   │   │   ├── auth_service.py     #   └─ User registration & login
+│   │   │   └── conversation_service.py  # └─ Conversation management
+│   │   ├── db_models/              # SQLAlchemy ORM models
+│   │   │   ├── base.py             #   └─ DB engine & session setup
+│   │   │   ├── user.py             #   └─ User model
+│   │   │   └── conversation.py     #   └─ Conversation & Message models
+│   │   └── schemas/                # Pydantic request/response schemas
+│   │       ├── auth.py             #   └─ Auth schemas
+│   │       ├── conversation.py     #   └─ Conversation schemas
+│   │       └── message.py          #   └─ Message schemas
+│   ├── data/                       # Data files
+│   │   ├── sales_data.csv          #   └─ Source business data
+│   │   ├── sales_data.db           #   └─ SQLite copy for queries
+│   │   └── embeddings_cache.pkl    #   └─ Pre-computed embeddings
+│   ├── mcp_servers/                # Model Context Protocol servers
+│   │   ├── rag_server/             #   └─ RAG retrieval MCP server
+│   │   └── sqlite_server/          #   └─ SQLite data access MCP server
+│   ├── requirements.txt            # Python dependencies
+│   └── .env.example                # Environment variable template
 │
 ├── Frontend/
 │   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Full page views
-│   │   └── App.jsx         # Main React component
-│   └── package.json        # Node dependencies
+│   │   ├── App.jsx                 # Main app component & routing
+│   │   ├── main.jsx                # React entry point
+│   │   ├── index.css               # Global styles & design system
+│   │   ├── components/
+│   │   │   ├── LandingPage.jsx     #   └─ Homepage / hero section
+│   │   │   ├── AuthModal.jsx       #   └─ Sign In / Sign Up modal
+│   │   │   ├── ChatInput.jsx       #   └─ Auto-expanding message input
+│   │   │   ├── ChatHistory.jsx     #   └─ Message history renderer
+│   │   │   ├── AnalyticsCharts.jsx #   └─ Chart rendering components
+│   │   │   ├── Sidebar.jsx         #   └─ Conversation sidebar
+│   │   │   └── SettingsModal.jsx   #   └─ User settings panel
+│   │   ├── api/
+│   │   │   ├── config.js           #   └─ API base URL configuration
+│   │   │   ├── auth.js             #   └─ Auth API calls
+│   │   │   └── conversations.js    #   └─ Conversation API calls
+│   │   └── contexts/
+│   │       ├── AuthContext.jsx      #   └─ Authentication state
+│   │       └── ConversationsContext.jsx  # └─ Conversation state
+│   ├── package.json
+│   └── vite.config.js
 │
-└── README.md               # You are here!
+├── AndroidApp/                     # Native Android client (Kotlin)
+│   ├── app/                        # App module (source, resources, manifests)
+│   ├── build.gradle.kts            # Root build configuration
+│   └── settings.gradle.kts         # Gradle settings
+│
+└── README.md
 ```
 
 ---
 
+## 🔌 API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/process` | Process a natural language query (streaming SSE response) |
+| `GET` | `/models` | List available LLM models |
+| `POST` | `/switch-model` | Switch the active LLM model |
+| `GET` | `/health` | Health check |
+| `POST` | `/auth/register` | Register a new user |
+| `POST` | `/auth/login` | Login and receive JWT token |
+| `GET` | `/conversations/` | List user conversations |
+| `POST` | `/conversations/` | Create a new conversation |
+| `GET` | `/conversations/{id}/messages` | Get messages for a conversation |
+| `GET` | `/admin/logs` | View activity logs (JSON) |
+| `GET` | `/admin/logs/download` | Download activity logs (Excel) |
+| `POST` | `/admin/logs/backup` | Create a backup of activity logs |
+
+> Full interactive API docs available at `http://localhost:8000/docs` when the server is running.
+
+---
+
 ## 🤝 Contributing
-1.  Fork the repository
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is developed as part of an academic main project (Phase II).
