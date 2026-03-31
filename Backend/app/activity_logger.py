@@ -8,6 +8,7 @@ import os
 import uuid
 import shutil
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 # === Configuration ===
 BASE_DIR = Path(__file__).resolve().parent.parent  # Backend/
 LOG_FILE = BASE_DIR / "user_activity_logs.xlsx"
+PENDING_FILE = BASE_DIR / "user_activity_logs_pending.xlsx"
 BACKUP_DIR = BASE_DIR / "backups"
 
 # Excel columns (order matters)
@@ -49,6 +51,7 @@ class ActivityLogger:
         self._write_buffer = []
         self._buffer_limit = 10
         self._ensure_file_exists()
+        self._recover_pending()
         print(f"[ActivityLogger] Initialized. Log file: {LOG_FILE}")
 
     @classmethod
@@ -90,6 +93,50 @@ class ActivityLogger:
         wb.save(str(LOG_FILE))
         wb.close()
         print(f"[ActivityLogger] Created new log file: {LOG_FILE}")
+
+    def _safe_save(self, wb) -> bool:
+        """
+        Save workbook with retry logic for PermissionError (file locked by Excel/OneDrive).
+        Falls back to saving a pending copy if the main file is locked.
+        """
+        for attempt in range(3):
+            try:
+                wb.save(str(LOG_FILE))
+                wb.close()
+                # If there's a stale pending file, clean it up
+                if PENDING_FILE.exists():
+                    PENDING_FILE.unlink()
+                return True
+            except PermissionError:
+                if attempt < 2:
+                    print(f"[ActivityLogger] File locked, retry {attempt + 1}/3...")
+                    time.sleep(0.5)
+                else:
+                    # Final fallback — save to a pending file
+                    try:
+                        wb.save(str(PENDING_FILE))
+                        wb.close()
+                        print(f"[ActivityLogger] Saved to pending file (main file locked by Excel/OneDrive)")
+                        return True
+                    except Exception as e2:
+                        wb.close()
+                        print(f"[ActivityLogger] ERROR: Could not save to pending file either: {e2}")
+                        return False
+        return False
+
+    def _recover_pending(self):
+        """If a pending file exists from a previous locked-file situation, merge it back."""
+        if not PENDING_FILE.exists():
+            return
+        try:
+            # Try to replace the main file with the pending (more recent) copy
+            shutil.copy2(str(PENDING_FILE), str(LOG_FILE))
+            PENDING_FILE.unlink()
+            print(f"[ActivityLogger] Recovered pending data into main log file")
+        except PermissionError:
+            print(f"[ActivityLogger] Warning: Main file still locked, pending data preserved for next restart")
+        except Exception as e:
+            print(f"[ActivityLogger] Warning: Could not recover pending file: {e}")
 
     def _find_user_row(self, ws, user_id: str) -> Optional[int]:
         """Find the row number for a given user_id. Returns None if not found."""
@@ -144,8 +191,7 @@ class ActivityLogger:
                     ]
                     ws.append(new_row)
 
-                wb.save(str(LOG_FILE))
-                wb.close()
+                self._safe_save(wb)
                 print(f"[ActivityLogger] Login logged for {username} (session: {session_id})")
             except Exception as e:
                 print(f"[ActivityLogger] ERROR logging login: {e}")
@@ -182,8 +228,7 @@ class ActivityLogger:
                 # Update last activity
                 ws.cell(row=row, column=self._col_index("last_activity"), value=now)
 
-                wb.save(str(LOG_FILE))
-                wb.close()
+                self._safe_save(wb)
                 print(f"[ActivityLogger] Query logged for user {user_id} (feature: {feature})")
             except Exception as e:
                 print(f"[ActivityLogger] ERROR logging query: {e}")
@@ -203,9 +248,9 @@ class ActivityLogger:
                 if row:
                     ws.cell(row=row, column=self._col_index("session_end"), value=now)
                     ws.cell(row=row, column=self._col_index("last_activity"), value=now)
-                    wb.save(str(LOG_FILE))
-
-                wb.close()
+                    self._safe_save(wb)
+                else:
+                    wb.close()
                 print(f"[ActivityLogger] Logout logged for user {user_id}")
             except Exception as e:
                 print(f"[ActivityLogger] ERROR logging logout: {e}")

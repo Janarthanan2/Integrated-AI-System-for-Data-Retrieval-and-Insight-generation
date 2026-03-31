@@ -95,3 +95,21 @@ async def verify_token(
         "user_id": current_user.id,
         "email": current_user.email
     }
+
+
+@router.post("/logout")
+async def logout(
+    current_user = Depends(get_current_user)
+):
+    """
+    Log out the current user.
+
+    Records session end time in the activity log.
+    Requires Bearer token in Authorization header.
+    """
+    try:
+        get_logger().log_logout(current_user.id)
+    except Exception as e:
+        print(f"[ActivityLogger] Warning: Could not log logout: {e}")
+
+    return {"message": "Logged out successfully"}

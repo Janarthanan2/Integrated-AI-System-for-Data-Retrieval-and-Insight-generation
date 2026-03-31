@@ -85,6 +85,19 @@ import time
 
 @app.post("/query") # Removed response_model since it's a stream
 async def process_query(request: QueryRequest, raw_request: Request):
+    # Extract user_id from auth header BEFORE entering the generator
+    _log_user_id = None
+    try:
+        auth_header = raw_request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            from .services.auth_service import AuthService
+            _log_user_id = AuthService.decode_token(auth_header.split(" ")[1])
+            print(f"[ActivityLogger] Extracted user_id for query logging: {_log_user_id}")
+        else:
+            print(f"[ActivityLogger] No Bearer token in query request")
+    except Exception as e:
+        print(f"[ActivityLogger] Error extracting user_id: {e}")
+
     async def event_generator():
         start_time = time.time()
         user_query = request.query
@@ -92,16 +105,6 @@ async def process_query(request: QueryRequest, raw_request: Request):
         # Initialize variables to avoid UnboundLocalError
         intent = "UNKNOWN"
         context_data = ""
-
-        # Extract user_id from optional auth header for activity logging
-        _log_user_id = None
-        try:
-            auth_header = raw_request.headers.get("authorization", "")
-            if auth_header.startswith("Bearer "):
-                from .services.auth_service import AuthService
-                _log_user_id = AuthService.decode_token(auth_header.split(" ")[1])
-        except Exception:
-            pass
 
         
 
@@ -157,9 +160,12 @@ async def process_query(request: QueryRequest, raw_request: Request):
             # Log query activity
             if _log_user_id:
                 try:
+                    print(f"[ActivityLogger] Logging query for user {_log_user_id}, intent: {intent}")
                     get_logger().log_query(_log_user_id, intent)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[ActivityLogger] ERROR in log_query: {e}")
+            else:
+                print(f"[ActivityLogger] Skipping query log — no user_id available")
 
             filters = params["filters"]
             scope = filters.get("region", "Global")

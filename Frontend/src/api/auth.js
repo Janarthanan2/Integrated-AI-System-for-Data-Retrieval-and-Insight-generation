@@ -36,9 +36,14 @@ export const login = async (credentials) => {
 };
 
 /**
- * Logout user (local only)
+ * Logout user — notify backend then clear local token
  */
-export const logout = () => {
+export const logout = async () => {
+    try {
+        await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+        console.warn('Logout API call failed (session may already be expired):', err);
+    }
     removeAuthToken();
 };
 

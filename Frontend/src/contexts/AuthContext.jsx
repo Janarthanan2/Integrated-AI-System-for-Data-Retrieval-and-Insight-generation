@@ -65,8 +65,8 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
-    const logout = useCallback(() => {
-        apiLogout();
+    const logout = useCallback(async () => {
+        await apiLogout();
         setUser(null);
         setIsAuthenticated(false);
     }, []);
